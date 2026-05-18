@@ -722,7 +722,7 @@ export default function Collection() {
           {denomOptions.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <div style={{ display: "flex", border: "1.5px solid #e2e8f0", borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
-          {[["list","≡","Rindas"],["3","⊞","3 kolonnas"],["4","⊟","4 kolonnas"],["5","⋮⋮","5 kolonnas"],["matrix","⊠","Laikmeta tabula"]].map(([mode, icon, title], i, arr) => (
+          {[["list","≡","Rindas"],["3","⊞","3 kolonnas"],["4","⊟","4 kolonnas"],["5","⋮⋮","5 kolonnas"],["6","⁞⁞","6 kolonnas"],["matrix","⊠","Laikmeta tabula"]].map(([mode, icon, title], i, arr) => (
             <button key={mode} onClick={() => setLayout(mode)} title={title} style={{
               padding: "7px 13px", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1,
               background: layout === mode ? "#2563eb" : "#fff",
@@ -755,7 +755,7 @@ export default function Collection() {
           ) : layout !== "list" ? (
             <div className={`grid-${layout}`}>
               {items.map(item => {
-                const compact = layout === "4" || layout === "5";
+                const compact = layout === "4" || layout === "5" || layout === "6";
                 return (
                   <div key={item.id} className="card" onClick={() => openItem(item)}
                     style={{ cursor: "pointer" }}

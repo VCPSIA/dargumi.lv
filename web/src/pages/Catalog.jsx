@@ -322,7 +322,7 @@ export default function Catalog() {
           onChange={e => setSearch(e.target.value)}
           style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #ddd", fontSize: 14, flex: 1, maxWidth: 400 }} />
         <div style={{ display: "flex", border: "1.5px solid #e2e8f0", borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
-          {[["list","≡","Rindas"],["3","⊞","3 kolonnas"],["4","⊟","4 kolonnas"],["5","⋮⋮","5 kolonnas"],["matrix","⊠","Laikmeta tabula"]].map(([mode, icon, title], i, arr) => (
+          {[["list","≡","Rindas"],["3","⊞","3 kolonnas"],["4","⊟","4 kolonnas"],["5","⋮⋮","5 kolonnas"],["6","⁞⁞","6 kolonnas"],["matrix","⊠","Laikmeta tabula"]].map(([mode, icon, title], i, arr) => (
             <button key={mode} onClick={() => setLayout(mode)} title={title} style={{
               padding: "7px 11px", border: "none", cursor: "pointer", fontSize: mode === "list" ? 18 : 14, lineHeight: 1,
               fontWeight: 700,
@@ -377,7 +377,7 @@ export default function Catalog() {
               ) : layout !== "list" ? (
                 <div className={`grid-${layout}`}>
                   {items.map(item => {
-                    const compact = layout === "4" || layout === "5";
+                    const compact = layout === "4" || layout === "5" || layout === "6";
                     const catImg = item.image_url ? (item.image_url.startsWith("http") ? item.image_url : BASE + item.image_url) : null;
                     const imgSrc = catImg || userPhotoMap[item.id] || null;
                     const owned = ownedMap[item.id];
