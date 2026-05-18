@@ -6,7 +6,7 @@ import api from "../api";
 import { flagEmoji } from "../utils/flag";
 import ZoomableImage from "../components/ZoomableImage";
 
-const BASE = "http://localhost:8001";
+const BASE = "";
 
 function parsePurity(material) {
   if (!material) return null;

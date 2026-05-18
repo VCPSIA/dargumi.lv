@@ -11,7 +11,7 @@ import RecognizeModal from "../components/RecognizeModal";
 import MatrixView from "../components/MatrixView";
 import { denomVal } from "../utils/denomSort";
 
-const BASE = "http://localhost:8001";
+const BASE = "";
 const CONDITIONS = ["UNC", "XF", "VF", "F", "VG", "G", "AG"];
 
 function PhotoBox({ label, url, inputRef, onChange, uploading }) {

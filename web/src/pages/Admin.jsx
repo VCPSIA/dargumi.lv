@@ -4,7 +4,7 @@ import api from "../api";
 import { flagEmoji } from "../utils/flag";
 import MatrixView from "../components/MatrixView";
 
-const BASE = "http://localhost:8001";
+const BASE = "";
 
 const SECTIONS = [
   { type: "coins",     label: "Monētas",    icon: "🪙" },
@@ -1255,7 +1255,7 @@ function EditPanel({ item, onClose }) {
 }
 
 // ── Pending submissions tab ───────────────────────────────────────────────────
-const BASE_URL = "http://localhost:8001";
+const BASE_URL = "";
 
 function BulkBar({ checkedCount, onDelete, onCancel, confirm, onConfirm, onBack, deleting }) {
   return (

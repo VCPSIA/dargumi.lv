@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { denomVal } from "../utils/denomSort";
 
-const BASE = "http://localhost:8001";
+const BASE = "";
 
 function shortDenom(d) {
   if (!d) return d;
