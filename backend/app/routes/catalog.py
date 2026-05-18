@@ -12,6 +12,33 @@ from app.models.user import User
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
+# Bijušo PSRS republiku kodi (bez SU pašas) — periods ar "PSR" nosaukumā
+# automātiski ietver arī SU kataloga priekšmetus
+PSRS_REPUBLIC_CODES = {"RU", "UA", "BY", "LV", "LT", "EE", "MD", "GE", "AM", "AZ", "KZ", "UZ", "TM", "KG", "TJ"}
+
+async def _expand_psrs_period_ids(period_id: int, db: AsyncSession) -> list[int]:
+    """Ja periods pieder PSRS republikai, papildina ar SU periodu ID tiem pašiem sadaļas priekšmetiem."""
+    row = await db.execute(
+        select(Period, Country.code)
+        .join(Country, Period.country_id == Country.id)
+        .where(Period.id == period_id)
+    )
+    p = row.first()
+    if not p:
+        return [period_id]
+    period_obj, c_code = p
+    if c_code not in PSRS_REPUBLIC_CODES:
+        return [period_id]
+    if "PSR" not in (period_obj.name or "") and "PSRS" not in (period_obj.name or ""):
+        return [period_id]
+    su_r = await db.execute(
+        select(Period.id)
+        .join(Country, Period.country_id == Country.id)
+        .where(Country.code == "SU", Period.section == period_obj.section)
+    )
+    su_ids = [r[0] for r in su_r.all()]
+    return [period_id] + su_ids
+
 @router.get("/continents", response_model=list[ContinentOut])
 async def get_continents(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Continent).order_by(Continent.name_lv))
@@ -57,12 +84,12 @@ async def get_items(
     search: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    q = select(CatalogItem).where(CatalogItem.is_approved.is_(True))
+    q = select(CatalogItem).join(Period, CatalogItem.period_id == Period.id, isouter=True).where(CatalogItem.is_approved.is_(True))
     if period_id:
-        q = q.where(CatalogItem.period_id == period_id)
+        ids = await _expand_psrs_period_ids(period_id, db)
+        q = q.where(CatalogItem.period_id.in_(ids))
     if country_id:
-        period_ids_q = select(Period.id).where(Period.country_id == country_id)
-        q = q.where(CatalogItem.period_id.in_(period_ids_q))
+        q = q.where(Period.country_id == country_id)
     if section:
         q = q.where(CatalogItem.section == section)
     if coin_category:
@@ -70,11 +97,39 @@ async def get_items(
     if search:
         q = q.where(CatalogItem.name.ilike(f"%{search}%"))
     q = q.order_by(
-        nulls_last(desc(cast(CatalogItem.year, Integer))),
-        nulls_last(desc(cast(CatalogItem.denomination, Float))),
+        nulls_last(Period.year_start),
+        nulls_last(cast(CatalogItem.year, Integer)),
+        nulls_last(cast(CatalogItem.denomination, Float)),
     )
     result = await db.execute(q.limit(500))
-    return result.scalars().all()
+    items = result.scalars().all()
+
+    # Bulk avg_price — viens vaicājums visiem priekšmetiem
+    from app.models.collection import CollectionItem
+    item_ids = [i.id for i in items]
+    price_map: dict = {}
+    if item_ids:
+        pr = await db.execute(
+            select(
+                CollectionItem.catalog_item_id,
+                func.avg(CollectionItem.purchase_price),
+                func.count(CollectionItem.purchase_price),
+            ).where(
+                CollectionItem.catalog_item_id.in_(item_ids),
+                CollectionItem.purchase_price.is_not(None),
+            ).group_by(CollectionItem.catalog_item_id)
+        )
+        for cid, avg, cnt in pr.all():
+            price_map[cid] = (avg, cnt)
+
+    out = []
+    for item in items:
+        d = {c.name: getattr(item, c.name) for c in item.__table__.columns}
+        avg, cnt = price_map.get(item.id, (None, 0))
+        d["avg_price"] = round(float(avg), 2) if avg is not None else None
+        d["avg_price_count"] = cnt or 0
+        out.append(d)
+    return out
 
 @router.get("/items/{item_id}/avg_price")
 async def get_avg_price(item_id: int, db: AsyncSession = Depends(get_db)):
@@ -94,6 +149,36 @@ async def get_avg_price(item_id: int, db: AsyncSession = Depends(get_db)):
         "avg_price": round(float(avg), 2) if avg is not None else None,
         "count": count or 0,
     }
+
+
+@router.get("/metal-price")
+async def get_metal_price(metal: str = Query(..., description="'gold' vai 'silver'")):
+    import httpx
+    import asyncio
+    metal_ticker = "GC%3DF" if metal == "gold" else "SI%3DF"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    async def fetch(ticker):
+        async with httpx.AsyncClient(timeout=8, verify=False) as c:
+            r = await c.get(
+                f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}",
+                params={"interval": "1d", "range": "1d"},
+                headers=headers,
+            )
+            return r.json()["chart"]["result"][0]["meta"]["regularMarketPrice"]
+
+    try:
+        price_usd, eur_usd = await asyncio.gather(
+            fetch(metal_ticker),
+            fetch("EURUSD%3DX"),
+        )
+        return {
+            "metal": metal,
+            "price_usd_oz": round(float(price_usd), 4),
+            "eur_usd_rate": round(float(eur_usd), 6),
+        }
+    except Exception:
+        raise HTTPException(503, "Nevar iegūt metāla cenu")
 
 
 @router.get("/items/{item_id}", response_model=CatalogItemOut)

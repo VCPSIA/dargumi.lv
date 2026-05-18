@@ -1,4 +1,4 @@
-from sqlalchemy import String, Text, Integer, ForeignKey, Enum
+from sqlalchemy import String, Text, Integer, Float, ForeignKey, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 import enum
@@ -81,9 +81,22 @@ class CatalogItem(Base):
     image_url_reverse: Mapped[str | None] = mapped_column(String(500), nullable=True)
     admin_edited: Mapped[bool] = mapped_column(default=False)
 
+    designer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    engraver: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     ucoin_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     numista_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_approved: Mapped[bool] = mapped_column(default=False)
 
     period: Mapped["Period"] = relationship(back_populates="items")
     collection_items: Mapped[list["CollectionItem"]] = relationship(back_populates="catalog_item")  # noqa
+
+
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    premium_enabled: Mapped[bool] = mapped_column(default=False)
+    premium_free_limit: Mapped[int] = mapped_column(Integer, default=50)
+    premium_price_monthly: Mapped[float] = mapped_column(Float, default=2.99)
+    premium_price_yearly: Mapped[float] = mapped_column(Float, default=19.99)

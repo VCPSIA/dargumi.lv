@@ -37,6 +37,7 @@
     "add": "➕ Добавить",
     "search": "🔍 Поиск...",
     "allConditions": "Все состояния",
+    "allDenominations": "Все номиналы",
     "empty": "Коллекция пуста. Сфотографируйте предмет!",
     "noResults": "Нет предметов в этой выборке.",
     "all": "📦 Все",
@@ -63,6 +64,8 @@
     "weight": "Вес",
     "mint": "Монетный двор",
     "mintage": "Тираж",
+    "designer": "Дизайнер",
+    "engraver": "Гравёр",
     "catalogNo": "Каталог №",
     "description": "Описание",
     "obverse": "Аверс",
@@ -74,6 +77,9 @@
     "perforation": "Перфорация",
     "color": "Цвет",
     "avgPrice": "Средняя рыночная цена",
+    "goldPrice": "Цена золота (сейчас)",
+    "silverPrice": "Цена серебра (сейчас)",
+    "metalMinValue": "Минимальная стоимость (содержание металла)",
     "myPrice": "Моя цена покупки",
     "collectors": "коллекционеры"
   },
@@ -111,7 +117,29 @@
     "noAccount": "Нет аккаунта?",
     "hasAccount": "Уже есть аккаунт?",
     "registerLink": "Зарегистрироваться",
-    "loginLink": "Войти"
+    "loginLink": "Войти",
+    "forgotPassword": "Забыл пароль",
+    "forgotPasswordTitle": "Забыл пароль",
+    "forgotPasswordDesc": "Введите ваш адрес эл. почты, и мы отправим вам ссылку для сброса пароля.",
+    "sendLink": "Отправить ссылку",
+    "sentSuccess": "Если этот email зарегистрирован, на него отправлена ссылка для сброса пароля.",
+    "sentExpiry": "Ссылка действительна 1 час.",
+    "backToLogin": "← Назад ко входу",
+    "newPasswordTitle": "Новый пароль",
+    "newPasswordLabel": "Новый пароль",
+    "repeatPassword": "Подтвердить пароль",
+    "savePassword": "Сохранить пароль",
+    "passwordsNoMatch": "Пароли не совпадают",
+    "passwordTooShort": "Пароль слишком короткий (мин. 6 символов)",
+    "linkInvalid": "Неверная ссылка.",
+    "resetError": "Ошибка. Ссылка недействительна или истекла.",
+    "resetSuccess": "Пароль обновлён! Перенаправление ко входу...",
+    "orLoginWith": "или войти с",
+    "continueWithFacebook": "Продолжить с Facebook",
+    "googleError": "Ошибка входа через Google",
+    "facebookError": "Ошибка входа через Facebook",
+    "facebookSdkError": "Facebook SDK не загружен",
+    "generalError": "Ошибка. Попробуйте снова."
   },
   "catalog": {
     "addTrade": "Добавить для обмена",
@@ -125,5 +153,15 @@
     "commemorative": "Памятная монета",
     "collector": "Коллекционная монета",
     "tokens": "Жетон"
+  },
+  "itemTypes": {
+    "collection": "Коллекция",
+    "trade": "Обмен",
+    "wishlist": "Список желаний"
+  },
+  "collection2": {
+    "addItem": "Добавить",
+    "selectSection": "Выберите раздел:",
+    "category": "Категория"
   }
 }

@@ -21,7 +21,21 @@ export default function Sidebar() {
     staleTime: 5 * 60 * 1000,
   });
 
-  if (!token) return null;
+  if (!token) {
+    return (
+      <aside style={{
+        width: 220, minHeight: "calc(100vh - 56px)",
+        background: "#fff", borderRight: "1px solid #e5e7eb",
+        padding: "12px 0", position: "sticky", top: 56,
+        flexShrink: 0, alignSelf: "flex-start",
+      }}>
+        <NavItem to="/catalog" icon="📚" label={t("nav.catalog")} />
+        <Divider />
+        <NavItem to="/login"    icon="🔑" label={t("nav.login")} />
+        <NavItem to="/register" icon="✏️"  label={t("nav.register")} />
+      </aside>
+    );
+  }
 
   return (
     <aside style={{

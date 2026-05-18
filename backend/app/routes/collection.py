@@ -1,15 +1,16 @@
 import os
 import uuid
+import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.collection import CollectionItem
-from app.models.catalog import SectionType, CatalogItem, Period, Country, Continent
+from app.models.catalog import SectionType, CatalogItem, Period, Country, Continent, AppSettings
+from app.models.user import User, UserSubscription
 from app.schemas.collection import CollectionItemCreate, CollectionItemOut, CollectionItemUpdate, CollectionTree, TreeNode
 from app.routes.auth import current_user
-from app.models.user import User
 
 router = APIRouter(prefix="/collection", tags=["collection"])
 
@@ -239,6 +240,32 @@ async def add_to_collection(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Premium limit check
+    settings_r = await db.execute(select(AppSettings).where(AppSettings.id == 1))
+    app_settings = settings_r.scalar_one_or_none()
+    if app_settings and app_settings.premium_enabled:
+        count_r = await db.execute(
+            select(func.count()).select_from(CollectionItem).where(CollectionItem.user_id == user.id)
+        )
+        item_count = count_r.scalar()
+        if item_count >= app_settings.premium_free_limit:
+            now = datetime.datetime.utcnow()
+            sub_r = await db.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_id == user.id, UserSubscription.is_active.is_(True))
+                .where(or_(UserSubscription.end_date.is_(None), UserSubscription.end_date > now))
+            )
+            if not sub_r.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "code": "premium_required",
+                        "free_limit": app_settings.premium_free_limit,
+                        "price_monthly": app_settings.premium_price_monthly,
+                        "price_yearly": app_settings.premium_price_yearly,
+                    },
+                )
+
     item = CollectionItem(user_id=user.id, **data.model_dump())
     db.add(item)
     await db.commit()

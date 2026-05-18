@@ -9,6 +9,7 @@ import GeoNav from "../components/GeoNav";
 import ZoomableImage from "../components/ZoomableImage";
 import RecognizeModal from "../components/RecognizeModal";
 import MatrixView from "../components/MatrixView";
+import { denomVal } from "../utils/denomSort";
 
 const BASE = "http://localhost:8001";
 const CONDITIONS = ["UNC", "XF", "VF", "F", "VG", "G", "AG"];
@@ -42,9 +43,9 @@ function PhotoBox({ label, url, inputRef, onChange, uploading }) {
 }
 
 const ITEM_TYPES_DEF = [
-  { key: "collection", icon: "🏛", label: "Kolekcija",      color: "#16a34a", bg: "#f0fdf4", border: "#86efac" },
-  { key: "trade",      icon: "🔄", label: "Apmaiņa",         color: "#92400e", bg: "#fffbeb", border: "#fcd34d" },
-  { key: "wishlist",   icon: "⭐", label: "Vēlmju saraksts", color: "#5b21b6", bg: "#f5f3ff", border: "#c4b5fd" },
+  { key: "collection", icon: "🏛", color: "#16a34a", bg: "#f0fdf4", border: "#86efac" },
+  { key: "trade",      icon: "🔄", color: "#92400e", bg: "#fffbeb", border: "#fcd34d" },
+  { key: "wishlist",   icon: "⭐", color: "#5b21b6", bg: "#f5f3ff", border: "#c4b5fd" },
 ];
 
 function DetailModal({ item, onClose, onDelete }) {
@@ -245,7 +246,7 @@ function DetailModal({ item, onClose, onDelete }) {
           {/* Collection status per type — only for catalog-linked items */}
           {item.catalog_item?.id && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-              {ITEM_TYPES_DEF.map(({ key, icon, label, color, bg, border }) => {
+              {ITEM_TYPES_DEF.map(({ key, icon, color, bg, border }) => {
                 const existing = byType[key];
                 const qty = existing?.quantity || 1;
                 return (
@@ -256,7 +257,7 @@ function DetailModal({ item, onClose, onDelete }) {
                     border: `1.5px solid ${existing ? border : "#e2e8f0"}`,
                   }}>
                     <div style={{ flex: 1, fontWeight: 700, fontSize: 13, color: existing ? color : "#94a3b8" }}>
-                      {icon} {label}
+                      {icon} {t(`itemTypes.${key}`)}
                       {existing && <span style={{ marginLeft: 8, fontWeight: 600 }}>· {qty} gab.</span>}
                     </div>
                     <button
@@ -269,7 +270,7 @@ function DetailModal({ item, onClose, onDelete }) {
                         opacity: adding === key ? 0.6 : 1, flexShrink: 0,
                       }}
                     >
-                      {adding === key ? "..." : existing ? "+ 1" : "Pievienot"}
+                      {adding === key ? "..." : existing ? "+ 1" : t("collection2.addItem")}
                     </button>
                   </div>
                 );
@@ -356,16 +357,16 @@ function DetailModal({ item, onClose, onDelete }) {
 
 
 const ITEM_TYPES = [
-  { key: "collection", label: "🏛 Kolekcija",     color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
-  { key: "trade",      label: "🔄 Apmaiņa",        color: "#92400e", bg: "#fffbeb", border: "#fcd34d" },
-  { key: "wishlist",   label: "⭐ Vēlmju saraksts", color: "#5b21b6", bg: "#f5f3ff", border: "#c4b5fd" },
+  { key: "collection", icon: "🏛", color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
+  { key: "trade",      icon: "🔄", color: "#92400e", bg: "#fffbeb", border: "#fcd34d" },
+  { key: "wishlist",   icon: "⭐", color: "#5b21b6", bg: "#f5f3ff", border: "#c4b5fd" },
 ];
 
 const SECTIONS_LIST = [
-  { key: "coins",     icon: "🪙", label: "Monētas" },
-  { key: "medals",    icon: "🏅", label: "Medaļas" },
-  { key: "stamps",    icon: "📮", label: "Pastmarkas" },
-  { key: "banknotes", icon: "💵", label: "Banknotes" },
+  { key: "coins",     icon: "🪙" },
+  { key: "medals",    icon: "🏅" },
+  { key: "stamps",    icon: "📮" },
+  { key: "banknotes", icon: "💵" },
 ];
 
 function ManualAddModal({ onClose }) {
@@ -442,14 +443,14 @@ function ManualAddModal({ onClose }) {
 
         {step === "section" && (
           <div>
-            <p style={{ color: "#64748b", fontSize: 14, marginBottom: 16 }}>Izvēlies sadaļu:</p>
+            <p style={{ color: "#64748b", fontSize: 14, marginBottom: 16 }}>{t("collection2.selectSection")}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {SECTIONS_LIST.map(s => (
                 <button key={s.key} onClick={() => { setSection(s.key); setStep("form"); }}
                   style={{ padding: "14px 16px", borderRadius: 10, border: "2px solid #e2e8f0",
                     background: "#f8fafc", cursor: "pointer", fontWeight: 700, fontSize: 15,
                     textAlign: "left", display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 24 }}>{s.icon}</span> {s.label}
+                  <span style={{ fontSize: 24 }}>{s.icon}</span> {t(`sections.${s.key}`)}
                 </button>
               ))}
             </div>
@@ -462,14 +463,14 @@ function ManualAddModal({ onClose }) {
             {section === "coins" && (
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8, textTransform: "uppercase", letterSpacing: .4 }}>
-                  Kategorija
+                  {t("collection2.category")}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                   {[
-                    { key: "circulation",   icon: "💰", label: "Apgrozījuma" },
-                    { key: "commemorative", icon: "🏛️", label: "Piemiņas" },
-                    { key: "collector",     icon: "⭐", label: "Kolekcijas" },
-                    { key: "tokens",        icon: "🎰", label: "Žetoni" },
+                    { key: "circulation",   icon: "💰" },
+                    { key: "commemorative", icon: "🏛️" },
+                    { key: "collector",     icon: "⭐" },
+                    { key: "tokens",        icon: "🎰" },
                   ].map(cat => (
                     <button key={cat.key} onClick={() => setForm(f => ({ ...f, coin_category: cat.key }))}
                       style={{
@@ -479,7 +480,7 @@ function ManualAddModal({ onClose }) {
                         background: form.coin_category === cat.key ? "#eff6ff" : "#f8fafc",
                         color: form.coin_category === cat.key ? "#1d4ed8" : "#374151",
                       }}>
-                      <span>{cat.icon}</span> {cat.label}
+                      <span>{cat.icon}</span> {t(`section.${cat.key}`)}
                     </button>
                   ))}
                 </div>
@@ -593,10 +594,12 @@ function ManualAddModal({ onClose }) {
 
 export default function Collection() {
   const [itemType, setItemType] = useState("collection");
-  const [geoFilter, setGeoFilter] = useState({});
+  const [geoFilter, setGeoFilter] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("collection-geo-filter")) || {}; } catch { return {}; }
+  });
   const [filterDenom, setFilterDenom] = useState("");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState(null);
+  const openItem = (item) => nav(`/collection/item/${item.id}`, { state: { item } });
   const [showManual, setShowManual] = useState(false);
   const [showRecognize, setShowRecognize] = useState(false);
   const [layout, setLayout] = useState("3");
@@ -624,10 +627,20 @@ export default function Collection() {
     const itemCountry = item.country?.name_lv || item.custom_country || "";
     const itemPeriod  = item.period?.name || ci?.period?.name || "";
     const itemDenomVal = ci?.denomination || item.custom_denomination || "";
-    if (geoFilter.countryName && itemCountry !== geoFilter.countryName) return false;
-    if (geoFilter.periodName  && itemPeriod  !== geoFilter.periodName)  return false;
+    const itemCoinCat = ci?.coin_category || item.custom_coin_category || "";
+    if (geoFilter.countryName  && itemCountry  !== geoFilter.countryName)  return false;
+    if (geoFilter.periodName   && itemPeriod   !== geoFilter.periodName)   return false;
+    if (geoFilter.coinCategory && itemCoinCat  !== geoFilter.coinCategory) return false;
     if (filterDenom && itemDenomVal !== filterDenom) return false;
     return true;
+  }).sort((a, b) => {
+    const da = a.catalog_item?.denomination || a.custom_denomination || "";
+    const db = b.catalog_item?.denomination || b.custom_denomination || "";
+    const dv = denomVal(db) - denomVal(da);
+    if (dv !== 0) return dv;
+    const ya = parseInt(a.catalog_item?.year || a.custom_year) || 0;
+    const yb = parseInt(b.catalog_item?.year || b.custom_year) || 0;
+    return ya - yb;
   });
 
   const remove = useMutation({
@@ -687,7 +700,7 @@ export default function Collection() {
       {/* Type tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         {ITEM_TYPES.map(tp => (
-          <button key={tp.key} onClick={() => { setItemType(tp.key); setSelected(null); }}
+          <button key={tp.key} onClick={() => { setItemType(tp.key); }}
             style={{
               padding: "8px 18px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13,
               border: `2px solid ${itemType === tp.key ? tp.border : "#e2e8f0"}`,
@@ -695,7 +708,7 @@ export default function Collection() {
               color: itemType === tp.key ? tp.color : "#64748b",
               transition: "all .15s",
             }}>
-            {tp.label}
+            {tp.icon} {t(`itemTypes.${tp.key}`)}
           </button>
         ))}
       </div>
@@ -705,7 +718,7 @@ export default function Collection() {
           style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #ddd", fontSize: 14, flex: 1, minWidth: 160 }} />
         <select value={filterDenom} onChange={e => setFilterDenom(e.target.value)}
           style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid #ddd", fontSize: 14 }}>
-          <option value="">Visi nomināli</option>
+          <option value="">{t("collection.allDenominations")}</option>
           {denomOptions.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <div style={{ display: "flex", border: "1.5px solid #e2e8f0", borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
@@ -721,7 +734,7 @@ export default function Collection() {
       </div>
 
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-        <GeoNav filter={geoFilter} onSelect={f => { setGeoFilter(f); setSelected(null); }} title={t("collection.title")} />
+        <GeoNav filter={geoFilter} onSelect={f => { setGeoFilter(f); sessionStorage.setItem("collection-geo-filter", JSON.stringify(f)); }} title={t("collection.title")} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
           {isLoading && <p style={{ color: "#888" }}>...</p>}
@@ -737,14 +750,14 @@ export default function Collection() {
             <MatrixView
               items={matrixItems}
               userPhotoMap={matrixUserPhotoMap}
-              onSelect={item => setSelected(item._original)}
+              onSelect={item => openItem(item._original)}
             />
           ) : layout !== "list" ? (
             <div className={`grid-${layout}`}>
               {items.map(item => {
                 const compact = layout === "4" || layout === "5";
                 return (
-                  <div key={item.id} className="card" onClick={() => setSelected(item)}
+                  <div key={item.id} className="card" onClick={() => openItem(item)}
                     style={{ cursor: "pointer" }}
                     onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.12)"; }}
                     onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}>
@@ -774,7 +787,7 @@ export default function Collection() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {items.map(item => (
-                <div key={item.id} onClick={() => setSelected(item)}
+                <div key={item.id} onClick={() => openItem(item)}
                   style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
                     background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, cursor: "pointer" }}
                   onMouseEnter={e => { e.currentTarget.style.background = "#f8fafc"; }}
@@ -805,14 +818,6 @@ export default function Collection() {
           )}
         </div>
       </div>
-
-      {selected && (
-        <DetailModal
-          item={selected}
-          onClose={() => setSelected(null)}
-          onDelete={id => { remove.mutate(id); setSelected(null); }}
-        />
-      )}
 
       {showManual && (
         <ManualAddModal onClose={() => setShowManual(false)} />

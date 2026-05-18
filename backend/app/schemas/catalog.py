@@ -46,11 +46,15 @@ class CatalogItemOut(BaseModel):
     weight_g: str | None
     mint: str | None
     mintage: str | None
+    designer: str | None = None
+    engraver: str | None = None
     perforation: str | None
     color: str | None
     catalog_number: str | None
     coin_category: str = "circulation"
     is_approved: bool = False
+    avg_price: float | None = None
+    avg_price_count: int = 0
     model_config = {"from_attributes": True}
 
 class RecognitionSave(BaseModel):

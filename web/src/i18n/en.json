@@ -37,6 +37,7 @@
     "add": "➕ Add",
     "search": "🔍 Search...",
     "allConditions": "All conditions",
+    "allDenominations": "All denominations",
     "empty": "Collection is empty. Photograph an item!",
     "noResults": "No items in this selection.",
     "all": "📦 All",
@@ -63,6 +64,8 @@
     "weight": "Weight",
     "mint": "Mint",
     "mintage": "Mintage",
+    "designer": "Designer",
+    "engraver": "Engraver",
     "catalogNo": "Catalog No.",
     "description": "Description",
     "obverse": "Obverse",
@@ -74,6 +77,9 @@
     "perforation": "Perforation",
     "color": "Color",
     "avgPrice": "Average market price",
+    "goldPrice": "Gold price (live)",
+    "silverPrice": "Silver price (live)",
+    "metalMinValue": "Minimum value (metal content)",
     "myPrice": "My purchase price",
     "collectors": "collectors"
   },
@@ -111,7 +117,29 @@
     "noAccount": "No account?",
     "hasAccount": "Already have an account?",
     "registerLink": "Register",
-    "loginLink": "Log in"
+    "loginLink": "Log in",
+    "forgotPassword": "Forgot password",
+    "forgotPasswordTitle": "Forgot Password",
+    "forgotPasswordDesc": "Enter your email address and we will send you a password reset link.",
+    "sendLink": "Send reset link",
+    "sentSuccess": "If this email is registered, a password reset link has been sent.",
+    "sentExpiry": "The link is valid for 1 hour.",
+    "backToLogin": "← Back to login",
+    "newPasswordTitle": "New Password",
+    "newPasswordLabel": "New password",
+    "repeatPassword": "Confirm password",
+    "savePassword": "Save password",
+    "passwordsNoMatch": "Passwords do not match",
+    "passwordTooShort": "Password too short (min. 6 characters)",
+    "linkInvalid": "Invalid link.",
+    "resetError": "Error. Link is invalid or expired.",
+    "resetSuccess": "Password updated! Redirecting to login...",
+    "orLoginWith": "or sign in with",
+    "continueWithFacebook": "Continue with Facebook",
+    "googleError": "Google login failed",
+    "facebookError": "Facebook login failed",
+    "facebookSdkError": "Facebook SDK not loaded",
+    "generalError": "Error. Please try again."
   },
   "catalog": {
     "addTrade": "Add for trade",
@@ -125,5 +153,15 @@
     "commemorative": "Commemorative coin",
     "collector": "Collector coin",
     "tokens": "Token"
+  },
+  "itemTypes": {
+    "collection": "Collection",
+    "trade": "Trade",
+    "wishlist": "Wishlist"
+  },
+  "collection2": {
+    "addItem": "Add",
+    "selectSection": "Select section:",
+    "category": "Category"
   }
 }

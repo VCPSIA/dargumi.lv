@@ -1,18 +1,45 @@
 import os
 import uuid
+import httpx
+import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, cast, Integer, Float, nulls_last, desc
+from sqlalchemy import select, cast, Integer, Float, nulls_last, desc, or_, func
 from pydantic import BaseModel
 from app.database import get_db
-from app.models.catalog import CatalogItem, Continent, Country, Period, SectionType
-from app.models.user import User
+from app.models.catalog import CatalogItem, Continent, Country, Period, SectionType, AppSettings
+from app.models.user import User, UserSubscription
+from app.models.collection import CollectionItem
 from app.schemas.catalog import CatalogItemOut, ContinentOut, CountryOut, PeriodOut
 from app.routes.auth import current_user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 UPLOAD_DIR = "uploads"
+
+PSRS_REPUBLIC_CODES = {"RU", "UA", "BY", "LV", "LT", "EE", "MD", "GE", "AM", "AZ", "KZ", "UZ", "TM", "KG", "TJ"}
+
+async def _expand_psrs_period_ids(period_id: int, db: AsyncSession) -> list[int]:
+    row = await db.execute(
+        select(Period, Country.code)
+        .join(Country, Period.country_id == Country.id)
+        .where(Period.id == period_id)
+    )
+    p = row.first()
+    if not p:
+        return [period_id]
+    period_obj, c_code = p
+    if c_code not in PSRS_REPUBLIC_CODES:
+        return [period_id]
+    if "PSR" not in (period_obj.name or "") and "PSRS" not in (period_obj.name or ""):
+        return [period_id]
+    su_r = await db.execute(
+        select(Period.id)
+        .join(Country, Period.country_id == Country.id)
+        .where(Country.code == "SU", Period.section == period_obj.section)
+    )
+    su_ids = [r[0] for r in su_r.all()]
+    return [period_id] + su_ids
 
 async def require_admin(user: User = Depends(current_user)) -> User:
     if not user.is_admin:
@@ -21,6 +48,11 @@ async def require_admin(user: User = Depends(current_user)) -> User:
 
 
 # ── Pydantic schemas ───────────────────────────────────────────────────────────
+
+class ImageFromUrlRequest(BaseModel):
+    url: str
+    side: str = "obverse"
+
 
 class CatalogItemUpdate(BaseModel):
     name: str | None = None
@@ -32,12 +64,25 @@ class CatalogItemUpdate(BaseModel):
     weight_g: str | None = None
     mint: str | None = None
     mintage: str | None = None
+    designer: str | None = None
+    engraver: str | None = None
     catalog_number: str | None = None
     obverse_description: str | None = None
     reverse_description: str | None = None
     perforation: str | None = None
     color: str | None = None
     coin_category: str | None = None
+
+
+class PremiumSettingsUpdate(BaseModel):
+    premium_enabled: bool | None = None
+    premium_free_limit: int | None = None
+    premium_price_monthly: float | None = None
+    premium_price_yearly: float | None = None
+
+class GrantSubscriptionRequest(BaseModel):
+    plan: str = "manual"  # "monthly" | "yearly" | "manual"
+    months: int | None = None
 
 
 class ContinentCreate(BaseModel):
@@ -93,6 +138,8 @@ class CatalogItemCreate(BaseModel):
     weight_g: str | None = None
     mint: str | None = None
     mintage: str | None = None
+    designer: str | None = None
+    engraver: str | None = None
     catalog_number: str | None = None
     description: str | None = None
     obverse_description: str | None = None
@@ -115,7 +162,8 @@ async def admin_list_catalog(
 ):
     q = select(CatalogItem).where(CatalogItem.is_approved.is_(True))
     if period_id:
-        q = q.where(CatalogItem.period_id == period_id)
+        ids = await _expand_psrs_period_ids(period_id, db)
+        q = q.where(CatalogItem.period_id.in_(ids))
     elif country_id:
         period_ids_q = select(Period.id).where(Period.country_id == country_id)
         q = q.where(CatalogItem.period_id.in_(period_ids_q))
@@ -175,6 +223,8 @@ async def admin_create_catalog_item(
         weight_g=data.weight_g,
         mint=data.mint,
         mintage=data.mintage,
+        designer=data.designer,
+        engraver=data.engraver,
         catalog_number=data.catalog_number,
         description=data.description,
         obverse_description=data.obverse_description,
@@ -289,6 +339,60 @@ async def admin_delete_catalog_item(
     await db.delete(item)
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/catalog/{item_id}/image-from-url", response_model=CatalogItemOut)
+async def admin_image_from_url(
+    item_id: int,
+    data: ImageFromUrlRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    r = await db.execute(select(CatalogItem).where(CatalogItem.id == item_id))
+    item = r.scalar_one_or_none()
+    if not item:
+        raise HTTPException(404, "Nav atrasts")
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+            resp = await client.get(
+                data.url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            )
+            resp.raise_for_status()
+    except Exception as e:
+        raise HTTPException(400, f"Nevar lejupielādēt attēlu: {str(e)}")
+
+    content_type = resp.headers.get("content-type", "").lower()
+    ext = "jpg"
+    if "png" in content_type:
+        ext = "png"
+    elif "webp" in content_type:
+        ext = "webp"
+    elif "gif" in content_type:
+        ext = "gif"
+    else:
+        url_filename = data.url.split("?")[0].split("/")[-1]
+        if "." in url_filename:
+            url_ext = url_filename.split(".")[-1].lower()
+            if url_ext in ("jpg", "jpeg", "png", "webp", "gif"):
+                ext = "jpg" if url_ext == "jpeg" else url_ext
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    filename = f"cat_{item_id}_{data.side}_{uuid.uuid4().hex[:8]}.{ext}"
+    path = os.path.join(UPLOAD_DIR, filename)
+    with open(path, "wb") as f:
+        f.write(resp.content)
+
+    url_stored = f"/uploads/{filename}"
+    if data.side == "reverse":
+        item.image_url_reverse = url_stored
+    else:
+        item.image_url = url_stored
+    item.admin_edited = True
+    await db.commit()
+    await db.refresh(item)
+    return item
 
 
 @router.delete("/catalog/{item_id}/image")
@@ -759,5 +863,139 @@ async def admin_delete_period(
     if r.scalar_one_or_none():
         raise HTTPException(400, "Nevar dzēst — ir saistīti kataloga ieraksti")
     await db.delete(obj)
+    await db.commit()
+    return {"ok": True}
+
+
+# ── Premium settings & subscriptions ──────────────────────────────────────────
+
+def _sub_out(sub: UserSubscription | None) -> dict | None:
+    if not sub:
+        return None
+    return {
+        "plan": sub.plan,
+        "start_date": sub.start_date.isoformat() if sub.start_date else None,
+        "end_date": sub.end_date.isoformat() if sub.end_date else None,
+        "is_active": sub.is_active,
+    }
+
+
+@router.get("/premium")
+async def get_premium_settings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    r = await db.execute(select(AppSettings).where(AppSettings.id == 1))
+    s = r.scalar_one_or_none()
+    if not s:
+        s = AppSettings(id=1)
+        db.add(s)
+        await db.commit()
+        await db.refresh(s)
+    return {
+        "premium_enabled": s.premium_enabled,
+        "premium_free_limit": s.premium_free_limit,
+        "premium_price_monthly": s.premium_price_monthly,
+        "premium_price_yearly": s.premium_price_yearly,
+    }
+
+
+@router.patch("/premium")
+async def update_premium_settings(
+    data: PremiumSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    r = await db.execute(select(AppSettings).where(AppSettings.id == 1))
+    s = r.scalar_one_or_none()
+    if not s:
+        s = AppSettings(id=1)
+        db.add(s)
+    for k, v in data.model_dump(exclude_none=True).items():
+        setattr(s, k, v)
+    await db.commit()
+    await db.refresh(s)
+    return {
+        "premium_enabled": s.premium_enabled,
+        "premium_free_limit": s.premium_free_limit,
+        "premium_price_monthly": s.premium_price_monthly,
+        "premium_price_yearly": s.premium_price_yearly,
+    }
+
+
+@router.get("/premium/users")
+async def get_premium_users(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    users_r = await db.execute(select(User).order_by(User.username))
+    users = users_r.scalars().all()
+
+    counts_r = await db.execute(
+        select(CollectionItem.user_id, func.count().label("cnt"))
+        .group_by(CollectionItem.user_id)
+    )
+    counts = {row.user_id: row.cnt for row in counts_r.all()}
+
+    now = datetime.datetime.utcnow()
+    subs_r = await db.execute(
+        select(UserSubscription)
+        .where(UserSubscription.is_active.is_(True))
+        .where(or_(UserSubscription.end_date.is_(None), UserSubscription.end_date > now))
+    )
+    subs = {s.user_id: s for s in subs_r.scalars().all()}
+
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "is_admin": u.is_admin,
+            "item_count": counts.get(u.id, 0),
+            "subscription": _sub_out(subs.get(u.id)),
+        }
+        for u in users
+    ]
+
+
+@router.post("/premium/grant/{user_id}")
+async def grant_subscription(
+    user_id: int,
+    data: GrantSubscriptionRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    # Deactivate existing active subscriptions
+    existing_r = await db.execute(
+        select(UserSubscription)
+        .where(UserSubscription.user_id == user_id, UserSubscription.is_active.is_(True))
+    )
+    for sub in existing_r.scalars().all():
+        sub.is_active = False
+
+    end_date = None
+    if data.plan == "monthly" and data.months:
+        end_date = datetime.datetime.utcnow() + datetime.timedelta(days=30 * data.months)
+    elif data.plan == "yearly" and data.months:
+        end_date = datetime.datetime.utcnow() + datetime.timedelta(days=365 * data.months)
+
+    new_sub = UserSubscription(user_id=user_id, plan=data.plan, end_date=end_date, is_active=True)
+    db.add(new_sub)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/premium/revoke/{user_id}")
+async def revoke_subscription(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    existing_r = await db.execute(
+        select(UserSubscription)
+        .where(UserSubscription.user_id == user_id, UserSubscription.is_active.is_(True))
+    )
+    for sub in existing_r.scalars().all():
+        sub.is_active = False
     await db.commit()
     return {"ok": True}

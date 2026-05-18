@@ -11,11 +11,6 @@ const BASE = "http://localhost:8001";
 
 const ICONS = { coins: "🪙", medals: "🏅", stamps: "📮", banknotes: "💵" };
 
-const COIN_CATS = [
-  { id: "circulation",   icon: "💰", labelKey: "section.circulation" },
-  { id: "commemorative", icon: "🏛️", labelKey: "section.commemorative" },
-  { id: "collector",     icon: "⭐", labelKey: "section.collector" },
-];
 
 function ItemDetailModal({ item, countryName, countryCode, periodName, onClose }) {
   const { t } = useTranslation();
@@ -113,7 +108,6 @@ export default function Section() {
   const { t } = useTranslation();
 
   const [geoFilter, setGeoFilter] = useState({});
-  const [coinCat, setCoinCat] = useState(null);
   const [selected, setSelected] = useState(null);
 
   const hasCountry = !!geoFilter.countryId;
@@ -122,7 +116,7 @@ export default function Section() {
   const params = { section: type };
   if (geoFilter.periodId) params.period_id = geoFilter.periodId;
   else if (geoFilter.countryId) params.country_id = geoFilter.countryId;
-  if (coinCat && type === "coins") params.coin_category = coinCat;
+  if (geoFilter.coinCategory && type === "coins") params.coin_category = geoFilter.coinCategory;
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["section-items", type, params],
@@ -132,7 +126,6 @@ export default function Section() {
 
   function handleGeoSelect(f) {
     setGeoFilter(f);
-    setCoinCat(null);
     setSelected(null);
   }
 
@@ -165,30 +158,6 @@ export default function Section() {
               {geoFilter.periodName && (
                 <><span>›</span><span style={{ fontWeight: 600, color: "#7c3aed" }}>{geoFilter.periodName}</span></>
               )}
-            </div>
-          )}
-
-          {/* Coin category tabs */}
-          {type === "coins" && hasCountry && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              <button onClick={() => setCoinCat(null)} style={{
-                padding: "6px 16px", borderRadius: 20, fontWeight: 600, fontSize: 13, cursor: "pointer",
-                background: !coinCat ? "#1e3a8a" : "#f1f5f9",
-                color: !coinCat ? "#fff" : "#374151",
-                border: "none",
-              }}>
-                {t("section.all")}
-              </button>
-              {COIN_CATS.map(c => (
-                <button key={c.id} onClick={() => setCoinCat(c.id)} style={{
-                  padding: "6px 16px", borderRadius: 20, fontWeight: 600, fontSize: 13, cursor: "pointer",
-                  background: coinCat === c.id ? "#1e3a8a" : "#f1f5f9",
-                  color: coinCat === c.id ? "#fff" : "#374151",
-                  border: "none",
-                }}>
-                  {c.icon} {t(c.labelKey)}
-                </button>
-              ))}
             </div>
           )}
 

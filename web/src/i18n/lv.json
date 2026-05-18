@@ -37,6 +37,7 @@
     "add": "➕ Pievienot",
     "search": "🔍 Meklēt...",
     "allConditions": "Visi stāvokļi",
+    "allDenominations": "Visi nomināli",
     "empty": "Kolekcija tukša. Fotografē priekšmetu!",
     "noResults": "Nav priekšmetu šajā atlasē.",
     "all": "📦 Visi",
@@ -63,6 +64,8 @@
     "weight": "Svars",
     "mint": "Kaltuve",
     "mintage": "Tirāža",
+    "designer": "Mākslinieks",
+    "engraver": "Gravieris",
     "catalogNo": "Kataloga Nr.",
     "description": "Apraksts",
     "obverse": "Priekšpuse",
@@ -74,6 +77,9 @@
     "perforation": "Perforācija",
     "color": "Krāsa",
     "avgPrice": "Vidējā tirgus cena",
+    "goldPrice": "Zelta cena (šobrīd)",
+    "silverPrice": "Sudraba cena (šobrīd)",
+    "metalMinValue": "Minimālā vērtība (metāla saturs)",
     "myPrice": "Mana pirkuma cena",
     "collectors": "kolekcionāri"
   },
@@ -111,7 +117,29 @@
     "noAccount": "Nav konta?",
     "hasAccount": "Jau ir konts?",
     "registerLink": "Reģistrēties",
-    "loginLink": "Ieiet"
+    "loginLink": "Ieiet",
+    "forgotPassword": "Aizmirsu paroli",
+    "forgotPasswordTitle": "Aizmirsu paroli",
+    "forgotPasswordDesc": "Ievadi savu e-pasta adresi un mēs nosūtīsim paroles atjaunošanas saiti.",
+    "sendLink": "Nosūtīt saiti",
+    "sentSuccess": "Ja šis e-pasts ir reģistrēts, uz to nosūtīta paroles atjaunošanas saite.",
+    "sentExpiry": "Saite derīga 1 stundu.",
+    "backToLogin": "← Atpakaļ uz ieiet",
+    "newPasswordTitle": "Jauna parole",
+    "newPasswordLabel": "Jaunā parole",
+    "repeatPassword": "Atkārtot paroli",
+    "savePassword": "Saglabāt paroli",
+    "passwordsNoMatch": "Paroles nesakrīt",
+    "passwordTooShort": "Parole pārāk īsa (min. 6 simboli)",
+    "linkInvalid": "Nepareiza saite.",
+    "resetError": "Kļūda. Saite nav derīga vai ir beigusies.",
+    "resetSuccess": "Parole atjaunota! Novirza uz ieiet...",
+    "orLoginWith": "vai ieiet ar",
+    "continueWithFacebook": "Turpināt ar Facebook",
+    "googleError": "Google ieeja neizdevās",
+    "facebookError": "Facebook ieeja neizdevās",
+    "facebookSdkError": "Facebook SDK nav ielādēts",
+    "generalError": "Kļūda. Mēģini vēlreiz."
   },
   "catalog": {
     "addTrade": "Pievienot apmaiņai",
@@ -125,5 +153,15 @@
     "commemorative": "Piemiņas monēta",
     "collector": "Kolekcionēšanas monēta",
     "tokens": "Žetons"
+  },
+  "itemTypes": {
+    "collection": "Kolekcija",
+    "trade": "Apmaiņa",
+    "wishlist": "Vēlmju saraksts"
+  },
+  "collection2": {
+    "addItem": "Pievienot",
+    "selectSection": "Izvēlies sadaļu:",
+    "category": "Kategorija"
   }
 }

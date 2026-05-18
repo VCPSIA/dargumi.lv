@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../api";
+import SocialLogin from "../components/SocialLogin";
 
 export default function Register() {
   const [form, setForm] = useState({ email: "", username: "", password: "" });
@@ -41,6 +42,7 @@ export default function Register() {
           {error && <p className="error">{error}</p>}
           <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: 8 }}>{t("auth.registerBtn")}</button>
         </form>
+        <SocialLogin onError={setError} />
         <p style={{ marginTop: 16, textAlign: "center", fontSize: 14 }}>
           {t("auth.hasAccount")} <Link to="/login" style={{ color: "#2563eb" }}>{t("auth.loginLink")}</Link>
         </p>

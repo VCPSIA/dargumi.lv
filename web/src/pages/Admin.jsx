@@ -123,6 +123,8 @@ function ItemFields({ form, setForm, section }) {
         {isCoinMedal && f("Svars (g)", "weight_g")}
         {!isStamp && f(section === "banknotes" ? "Iespiestuve" : "Kaltuve", "mint")}
         {f("Tirāža", "mintage")}
+        {isCoinMedal && f("Mākslinieks", "designer")}
+        {isCoinMedal && f("Gravieris", "engraver")}
         {f("Kataloga Nr.", "catalog_number")}
         {isStamp && f("Perforācija", "perforation")}
         {isStamp && f("Krāsa", "color")}
@@ -317,6 +319,8 @@ function AddItemForm({ onDuplicate, prefill }) {
         weight_g: data.weight_g || "",
         mint: data.mint || "",
         mintage: data.mintage || "",
+        designer: data.designer || "",
+        engraver: data.engraver || "",
         catalog_number: data.catalog_number || "",
         description: data.description || "",
         obverse_description: data.obverse_description || "",
@@ -381,6 +385,8 @@ function AddItemForm({ onDuplicate, prefill }) {
       weight_g: form.weight_g || null,
       mint: form.mint || null,
       mintage: form.mintage || null,
+      designer: form.designer || null,
+      engraver: form.engraver || null,
       catalog_number: form.catalog_number || null,
       description: form.description || null,
       obverse_description: form.obverse_description || null,
@@ -952,9 +958,27 @@ function AdminTreeSidebar({ tree, filter, onSetFilter }) {
 }
 
 // ── Photo slot (for EditPanel) ─────────────────────────────────────────────────
-function PhotoSlot({ label, url, onUpload, onDelete, uploading }) {
+function PhotoSlot({ label, url, onUpload, onDelete, uploading, onImportUrl }) {
   const ref = useRef();
+  const [urlMode, setUrlMode] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [urlLoading, setUrlLoading] = useState(false);
+  const [urlErr, setUrlErr] = useState(null);
   const imgSrc = url ? (url.startsWith("http") ? url : BASE + url) : null;
+
+  async function importFromUrl() {
+    if (!urlInput.trim()) return;
+    setUrlLoading(true); setUrlErr(null);
+    try {
+      await onImportUrl(urlInput.trim());
+      setUrlInput(""); setUrlMode(false);
+    } catch (e) {
+      setUrlErr(e.response?.data?.detail || "Lejupielāde neizdevās");
+    } finally {
+      setUrlLoading(false);
+    }
+  }
+
   return (
     <div style={{ flex: 1 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>{label}</div>
@@ -965,7 +989,7 @@ function PhotoSlot({ label, url, onUpload, onDelete, uploading }) {
           ? <img src={imgSrc} alt={label} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
           : <div style={{ textAlign: "center", color: "#94a3b8" }}><div style={{ fontSize: 28 }}>📷</div><div style={{ fontSize: 12 }}>Augšuplādēt</div></div>
         }
-        {uploading && <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,.7)",
+        {(uploading || urlLoading) && <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,.7)",
           display: "flex", alignItems: "center", justifyContent: "center" }}>⏳</div>}
       </div>
       <input ref={ref} type="file" accept="image/*" style={{ display: "none" }}
@@ -977,7 +1001,32 @@ function PhotoSlot({ label, url, onUpload, onDelete, uploading }) {
         </button>
         {imgSrc && <button onClick={onDelete} style={{ padding: "4px 8px", fontSize: 12, borderRadius: 6,
           border: "1px solid #ef4444", background: "#fef2f2", color: "#dc2626", cursor: "pointer" }}>✕</button>}
+        <button onClick={() => { setUrlMode(m => !m); setUrlErr(null); setUrlInput(""); }}
+          title="Ielādēt no URL" style={{ padding: "4px 8px", fontSize: 12, borderRadius: 6,
+          border: "1px solid #cbd5e1", background: urlMode ? "#e0f2fe" : "#f8fafc", color: "#64748b", cursor: "pointer" }}>
+          🔗
+        </button>
       </div>
+      {urlMode && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            <input
+              value={urlInput} onChange={e => setUrlInput(e.target.value)}
+              placeholder="https://ucoin.net/... vai cits URL"
+              style={{ ...inp, fontSize: 11, padding: "4px 8px", flex: 1 }}
+              onKeyDown={e => e.key === "Enter" && importFromUrl()}
+              autoFocus
+            />
+            <button onClick={importFromUrl} disabled={urlLoading || !urlInput.trim()} style={{
+              padding: "4px 10px", borderRadius: 6, background: "#2563eb", color: "#fff",
+              border: "none", cursor: "pointer", fontSize: 11, whiteSpace: "nowrap",
+            }}>
+              {urlLoading ? "..." : "↓ Lejupielādēt"}
+            </button>
+          </div>
+          {urlErr && <div style={{ color: "#dc2626", fontSize: 11, marginTop: 3 }}>⚠️ {urlErr}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -988,7 +1037,9 @@ function EditPanel({ item, onClose }) {
   const [form, setForm] = useState({
     name: item.name || "", year: item.year || "", denomination: item.denomination || "",
     material: item.material || "", diameter_mm: item.diameter_mm || "", weight_g: item.weight_g || "",
-    mint: item.mint || "", mintage: item.mintage || "", catalog_number: item.catalog_number || "",
+    mint: item.mint || "", mintage: item.mintage || "",
+    designer: item.designer || "", engraver: item.engraver || "",
+    catalog_number: item.catalog_number || "",
     coin_category: item.coin_category || "circulation", description: item.description || "",
     obverse_description: item.obverse_description || "", reverse_description: item.reverse_description || "",
     perforation: item.perforation || "", color: item.color || "",
@@ -999,6 +1050,7 @@ function EditPanel({ item, onClose }) {
   const [uploadingRev, setUploadingRev] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [saveAsNewMsg, setSaveAsNewMsg] = useState(null);
 
   const deleteMut = useMutation({
     mutationFn: () => api.delete(`/admin/catalog/${item.id}`),
@@ -1014,7 +1066,8 @@ function EditPanel({ item, onClose }) {
     try {
       const fd = new FormData(); fd.append("file", file);
       const { data } = await api.post(`/admin/catalog/${item.id}/image?side=${side}`, fd);
-      setUrl(data.image_url.startsWith("http") ? data.image_url : BASE + data.image_url);
+      const newUrl = side === "reverse" ? data.image_url_reverse : data.image_url;
+      setUrl(newUrl ? (newUrl.startsWith("http") ? newUrl : BASE + newUrl) : null);
       qc.invalidateQueries({ queryKey: ["admin-catalog"] });
       qc.invalidateQueries({ queryKey: ["catalog-items"] });
     } finally { setUploading(false); }
@@ -1025,10 +1078,59 @@ function EditPanel({ item, onClose }) {
     qc.invalidateQueries({ queryKey: ["admin-catalog"] });
     qc.invalidateQueries({ queryKey: ["catalog-items"] });
   }
+  async function importPhotoFromUrl(url, side, setUrl) {
+    const { data } = await api.post(`/admin/catalog/${item.id}/image-from-url`, { url, side });
+    const newUrl = side === "reverse" ? data.image_url_reverse : data.image_url;
+    setUrl(newUrl ? (newUrl.startsWith("http") ? newUrl : BASE + newUrl) : null);
+    qc.invalidateQueries({ queryKey: ["admin-catalog"] });
+    qc.invalidateQueries({ queryKey: ["catalog-items"] });
+  }
 
   const save = useMutation({
     mutationFn: () => api.patch(`/admin/catalog/${item.id}`, form),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-catalog"] }); setSaved(true); setTimeout(() => setSaved(false), 2000); },
+  });
+
+  const saveAsNew = useMutation({
+    mutationFn: async () => {
+      const r = await api.post("/admin/catalog", {
+        period_id: item.period_id,
+        section: item.section,
+        coin_category: form.coin_category || item.coin_category || "circulation",
+        name: form.name || "Nezināms",
+        year: form.year || null,
+        denomination: form.denomination || null,
+        material: form.material || null,
+        diameter_mm: form.diameter_mm || null,
+        weight_g: form.weight_g || null,
+        mint: form.mint || null,
+        mintage: form.mintage || null,
+        designer: form.designer || null,
+        engraver: form.engraver || null,
+        catalog_number: form.catalog_number || null,
+        description: form.description || null,
+        obverse_description: form.obverse_description || null,
+        reverse_description: form.reverse_description || null,
+        perforation: form.perforation || null,
+        color: form.color || null,
+      });
+      const newId = r.data.id;
+      const toAbs = url => url ? (url.startsWith("http") ? url : BASE + url) : null;
+      const obUrl = toAbs(obverseUrl);
+      const revUrl = toAbs(reverseUrl);
+      if (obUrl) await api.post(`/admin/catalog/${newId}/image-from-url`, { url: obUrl, side: "obverse" }).catch(() => {});
+      if (revUrl && isTwoSided) await api.post(`/admin/catalog/${newId}/image-from-url`, { url: revUrl, side: "reverse" }).catch(() => {});
+      return r;
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["admin-catalog"] });
+      qc.invalidateQueries({ queryKey: ["catalog-tree"] });
+      setSaveAsNewMsg({ ok: `Izveidots jauns ieraksts: "${r.data.name}" (ID ${r.data.id})` });
+    },
+    onError: (e) => {
+      const detail = e.response?.data?.detail || "Kļūda";
+      setSaveAsNewMsg({ err: detail });
+    },
   });
 
   const isTwoSided  = ["coins", "medals", "banknotes"].includes(item.section);
@@ -1065,10 +1167,12 @@ function EditPanel({ item, onClose }) {
         <div style={{ display: "flex", gap: 10 }}>
           <PhotoSlot label="Averse" url={obverseUrl} uploading={uploadingOb}
             onUpload={f => uploadPhoto(f, "obverse", setUploadingOb, setObverseUrl)}
-            onDelete={() => deletePhoto("obverse", setObverseUrl)} />
+            onDelete={() => deletePhoto("obverse", setObverseUrl)}
+            onImportUrl={url => importPhotoFromUrl(url, "obverse", setObverseUrl)} />
           {isTwoSided && <PhotoSlot label="Reverse" url={reverseUrl} uploading={uploadingRev}
             onUpload={f => uploadPhoto(f, "reverse", setUploadingRev, setReverseUrl)}
-            onDelete={() => deletePhoto("reverse", setReverseUrl)} />}
+            onDelete={() => deletePhoto("reverse", setReverseUrl)}
+            onImportUrl={url => importPhotoFromUrl(url, "reverse", setReverseUrl)} />}
         </div>
       </div>
 
@@ -1083,6 +1187,8 @@ function EditPanel({ item, onClose }) {
         {isCoinMedal && <div>{field("Svars (g)", "weight_g")}</div>}
         {item.section !== "stamps" && <div>{field(item.section === "banknotes" ? "Iespiestuve" : "Kaltuve", "mint")}</div>}
         <div>{field("Tirāža", "mintage")}</div>
+        {isCoinMedal && <div>{field("Mākslinieks", "designer")}</div>}
+        {isCoinMedal && <div>{field("Gravieris", "engraver")}</div>}
         <div>{field("Kataloga Nr.", "catalog_number")}</div>
         <div>
           <label style={lbl}>Kategorija</label>
@@ -1104,6 +1210,16 @@ function EditPanel({ item, onClose }) {
         </button>
         <button className="btn btn-outline" onClick={onClose}>Aizvērt</button>
       </div>
+
+      <button onClick={() => { setSaveAsNewMsg(null); saveAsNew.mutate(); }} disabled={saveAsNew.isPending} style={{
+        marginTop: 8, width: "100%", padding: "8px 0", borderRadius: 8, cursor: "pointer",
+        border: "1.5px solid #7c3aed", background: saveAsNew.isPending ? "#f5f3ff" : "#faf5ff",
+        color: "#7c3aed", fontWeight: 600, fontSize: 13,
+      }}>
+        {saveAsNew.isPending ? "Veido..." : "📋 Saglabāt kā jaunu ierakstu"}
+      </button>
+      {saveAsNewMsg?.ok && <div style={{ color: "#16a34a", fontWeight: 700, marginTop: 6, fontSize: 13 }}>✅ {saveAsNewMsg.ok}</div>}
+      {saveAsNewMsg?.err && <div style={{ color: "#dc2626", fontWeight: 600, marginTop: 6, fontSize: 13 }}>⚠️ {saveAsNewMsg.err}</div>}
 
       {!confirmDelete ? (
         <button onClick={() => setConfirmDelete(true)} style={{
@@ -1141,9 +1257,51 @@ function EditPanel({ item, onClose }) {
 // ── Pending submissions tab ───────────────────────────────────────────────────
 const BASE_URL = "http://localhost:8001";
 
+function BulkBar({ checkedCount, onDelete, onCancel, confirm, onConfirm, onBack, deleting }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10,
+      background: confirm ? "#fef2f2" : "#fff7ed",
+      border: `1.5px solid ${confirm ? "#fca5a5" : "#fdba74"}`,
+      borderRadius: 10, padding: "8px 14px" }}>
+      <span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>
+        {confirm
+          ? `⚠️ Tiešām dzēst ${checkedCount} ierakstus? Šo nevar atcelt!`
+          : `Atzīmēti ${checkedCount} ieraksti`}
+      </span>
+      {!confirm ? (
+        <>
+          <button onClick={onDelete} style={{ padding: "5px 14px", borderRadius: 7, fontWeight: 700, fontSize: 13,
+            background: "#dc2626", color: "#fff", border: "none", cursor: "pointer" }}>
+            🗑️ Dzēst
+          </button>
+          <button onClick={onCancel} style={{ padding: "5px 14px", borderRadius: 7, fontWeight: 600, fontSize: 13,
+            background: "#f1f5f9", color: "#374151", border: "1.5px solid #e2e8f0", cursor: "pointer" }}>
+            Atcelt
+          </button>
+        </>
+      ) : (
+        <>
+          <button disabled={deleting} onClick={onConfirm} style={{ padding: "5px 14px", borderRadius: 7, fontWeight: 700, fontSize: 13,
+            background: deleting ? "#9ca3af" : "#991b1b", color: "#fff", border: "none",
+            cursor: deleting ? "not-allowed" : "pointer" }}>
+            {deleting ? "Dzēš..." : "Jā, dzēst!"}
+          </button>
+          <button onClick={onBack} style={{ padding: "5px 14px", borderRadius: 7, fontWeight: 600, fontSize: 13,
+            background: "#f1f5f9", color: "#374151", border: "1.5px solid #e2e8f0", cursor: "pointer" }}>
+            Nē
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PendingCatalogSection({ items, onRefresh }) {
   const qc = useQueryClient();
   const [loading, setLoading] = useState(null);
+  const [checkedIds, setCheckedIds] = useState(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   async function approve(id) {
     setLoading(id);
@@ -1172,6 +1330,25 @@ function PendingCatalogSection({ items, onRefresh }) {
     }
   }
 
+  async function bulkDelete() {
+    setBulkDeleting(true);
+    for (const id of checkedIds) {
+      try { await api.delete(`/admin/pending-catalog/${id}`); } catch {}
+    }
+    setCheckedIds(new Set());
+    setBulkConfirm(false);
+    setBulkDeleting(false);
+    qc.invalidateQueries({ queryKey: ["admin-pending-catalog"] });
+    onRefresh();
+  }
+
+  function toggleCheck(id, e) {
+    e.stopPropagation();
+    const next = new Set(checkedIds);
+    if (next.has(id)) { next.delete(id); setBulkConfirm(false); } else next.add(id);
+    setCheckedIds(next);
+  }
+
   if (items.length === 0) return null;
 
   return (
@@ -1179,14 +1356,39 @@ function PendingCatalogSection({ items, onRefresh }) {
       <h3 style={{ fontWeight: 800, fontSize: 15, marginBottom: 10, color: "#1e3a8a" }}>
         📚 AI atpazītie kataloga ieraksti ({items.length})
       </h3>
+
+      {checkedIds.size > 0 && (
+        <BulkBar checkedCount={checkedIds.size} confirm={bulkConfirm} deleting={bulkDeleting}
+          onDelete={() => setBulkConfirm(true)}
+          onCancel={() => { setCheckedIds(new Set()); setBulkConfirm(false); }}
+          onConfirm={bulkDelete}
+          onBack={() => setBulkConfirm(false)} />
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <button onClick={() => {
+          if (checkedIds.size === items.length) { setCheckedIds(new Set()); setBulkConfirm(false); }
+          else setCheckedIds(new Set(items.map(i => i.id)));
+        }} style={{ padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+          background: "#f1f5f9", color: "#374151", border: "1.5px solid #e2e8f0" }}>
+          {checkedIds.size === items.length ? "Noatzīmēt visus" : "Atzīmēt visus"}
+        </button>
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {items.map(item => {
           const imgSrc = item.image_url ? BASE_URL + item.image_url : null;
+          const isChecked = checkedIds.has(item.id);
           return (
             <div key={item.id} style={{
-              border: "2px solid #bfdbfe", borderRadius: 10, background: "#eff6ff",
+              border: `2px solid ${isChecked ? "#fbbf24" : "#bfdbfe"}`,
+              borderRadius: 10, background: isChecked ? "#fef9c3" : "#eff6ff",
               padding: 12, display: "flex", gap: 12, alignItems: "center",
             }}>
+              <input type="checkbox" checked={isChecked}
+                onClick={e => e.stopPropagation()}
+                onChange={e => toggleCheck(item.id, e)}
+                style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer", accentColor: "#dc2626" }} />
               {imgSrc
                 ? <img src={imgSrc} alt="" style={{ width: 60, height: 60, objectFit: "contain", borderRadius: 6, background: "#f1f5f9", flexShrink: 0 }} />
                 : <div style={{ width: 60, height: 60, background: "#dbeafe", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🪙</div>
@@ -1224,6 +1426,9 @@ function PendingTab({ pending, pendingCatalog, onRefresh }) {
   const qc = useQueryClient();
   const [confirmId, setConfirmId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [checkedIds, setCheckedIds] = useState(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   async function approve(id) {
     setLoading(true);
@@ -1247,6 +1452,25 @@ function PendingTab({ pending, pendingCatalog, onRefresh }) {
     onRefresh();
   }
 
+  async function bulkDelete() {
+    setBulkDeleting(true);
+    for (const id of checkedIds) {
+      try { await api.delete(`/admin/pending/${id}`); } catch {}
+    }
+    setCheckedIds(new Set());
+    setBulkConfirm(false);
+    setBulkDeleting(false);
+    qc.invalidateQueries({ queryKey: ["admin-pending"] });
+    onRefresh();
+  }
+
+  function toggleCheck(id, e) {
+    e.stopPropagation();
+    const next = new Set(checkedIds);
+    if (next.has(id)) { next.delete(id); setBulkConfirm(false); } else next.add(id);
+    setCheckedIds(next);
+  }
+
   if (pending.length === 0 && pendingCatalog.length === 0) return (
     <div style={{ textAlign: "center", paddingTop: 60, color: "#94a3b8", fontSize: 16 }}>
       Nav neapstiprinātu iesniegumu.
@@ -1258,81 +1482,473 @@ function PendingTab({ pending, pendingCatalog, onRefresh }) {
       <PendingCatalogSection items={pendingCatalog} onRefresh={onRefresh} />
 
       {pending.length > 0 && (
-        <h3 style={{ fontWeight: 800, fontSize: 15, marginBottom: 10, color: "#92400e" }}>
-          ✍️ Manuāli ievadītie priekšmeti ({pending.length})
-        </h3>
-      )}
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {pending.map(item => {
-        const imgSrc = item.user_image ? BASE_URL + item.user_image : null;
-        const isConfirming = confirmId === item.id;
+        <>
+          <h3 style={{ fontWeight: 800, fontSize: 15, marginBottom: 10, color: "#92400e" }}>
+            ✍️ Manuāli ievadītie priekšmeti ({pending.length})
+          </h3>
 
-        return (
-          <div key={item.id} style={{
-            border: "2px solid #fca5a5", borderRadius: 12, background: "#fff5f5",
-            padding: 16, display: "flex", gap: 16, alignItems: "flex-start",
-          }}>
-            {/* Photo */}
-            <div style={{ width: 90, flexShrink: 0 }}>
-              {imgSrc
-                ? <img src={imgSrc} alt="" style={{ width: 90, height: 90, objectFit: "contain", borderRadius: 8, background: "#f1f5f9" }} />
-                : <div style={{ width: 90, height: 90, background: "#f1f5f9", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🪙</div>}
-            </div>
+          {checkedIds.size > 0 && (
+            <BulkBar checkedCount={checkedIds.size} confirm={bulkConfirm} deleting={bulkDeleting}
+              onDelete={() => setBulkConfirm(true)}
+              onCancel={() => { setCheckedIds(new Set()); setBulkConfirm(false); }}
+              onConfirm={bulkDelete}
+              onBack={() => setBulkConfirm(false)} />
+          )}
 
-            {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
-                {item.custom_name || `${item.custom_denomination || ""} ${item.custom_year || ""}`.trim() || "Bez nosaukuma"}
-              </div>
-              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {item.custom_year        && <span>Gads: {item.custom_year}</span>}
-                {item.custom_denomination && <span>Nomināls: {item.custom_denomination}</span>}
-                {item.custom_country      && <span>Valsts: {item.custom_country}</span>}
-                {item.custom_material     && <span>Materiāls: {item.custom_material}</span>}
-                <span style={{ color: "#94a3b8" }}>Iesniedzējs: {item.username}</span>
-              </div>
-              {item.custom_description && (
-                <div style={{ fontSize: 12, color: "#374151", background: "#f8fafc", borderRadius: 6, padding: "4px 8px", marginBottom: 8 }}>
-                  {item.custom_description}
-                </div>
-              )}
-
-              {isConfirming ? (
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8,
-                  background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", border: "1px solid #86efac" }}>
-                  <span style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>
-                    Apstiprināt un novietot automātiski?
-                  </span>
-                  <button onClick={() => approve(item.id)} disabled={loading}
-                    style={{ padding: "5px 16px", borderRadius: 6, background: "#16a34a", color: "#fff",
-                      border: "none", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
-                    {loading ? "..." : "Jā"}
-                  </button>
-                  <button onClick={() => setConfirmId(null)} disabled={loading}
-                    style={{ padding: "5px 12px", borderRadius: 6, background: "#f1f5f9", color: "#374151",
-                      border: "1px solid #e2e8f0", cursor: "pointer", fontSize: 13 }}>
-                    Atcelt
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                  <button onClick={() => setConfirmId(item.id)}
-                    style={{ padding: "6px 16px", borderRadius: 6, background: "#16a34a", color: "#fff",
-                      border: "none", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
-                    ✓ Apstiprināt
-                  </button>
-                  <button onClick={() => dismiss(item.id)}
-                    style={{ padding: "6px 12px", borderRadius: 6, background: "#f1f5f9", color: "#94a3b8",
-                      border: "1.5px solid #e2e8f0", cursor: "pointer", fontSize: 13 }}>
-                    Noraidīt
-                  </button>
-                </div>
-              )}
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <button onClick={() => {
+              if (checkedIds.size === pending.length) { setCheckedIds(new Set()); setBulkConfirm(false); }
+              else setCheckedIds(new Set(pending.map(i => i.id)));
+            }} style={{ padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              background: "#f1f5f9", color: "#374151", border: "1.5px solid #e2e8f0" }}>
+              {checkedIds.size === pending.length ? "Noatzīmēt visus" : "Atzīmēt visus"}
+            </button>
           </div>
-        );
-      })}
+        </>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {pending.map(item => {
+          const imgSrc = item.user_image ? BASE_URL + item.user_image : null;
+          const isConfirming = confirmId === item.id;
+          const isChecked = checkedIds.has(item.id);
+
+          return (
+            <div key={item.id} style={{
+              border: `2px solid ${isChecked ? "#fbbf24" : "#fca5a5"}`,
+              borderRadius: 12, background: isChecked ? "#fef9c3" : "#fff5f5",
+              padding: 16, display: "flex", gap: 16, alignItems: "flex-start",
+            }}>
+              <input type="checkbox" checked={isChecked}
+                onClick={e => e.stopPropagation()}
+                onChange={e => toggleCheck(item.id, e)}
+                style={{ width: 16, height: 16, marginTop: 4, flexShrink: 0, cursor: "pointer", accentColor: "#dc2626" }} />
+
+              {/* Photo */}
+              <div style={{ width: 90, flexShrink: 0 }}>
+                {imgSrc
+                  ? <img src={imgSrc} alt="" style={{ width: 90, height: 90, objectFit: "contain", borderRadius: 8, background: "#f1f5f9" }} />
+                  : <div style={{ width: 90, height: 90, background: "#f1f5f9", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🪙</div>}
+              </div>
+
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+                  {item.custom_name || `${item.custom_denomination || ""} ${item.custom_year || ""}`.trim() || "Bez nosaukuma"}
+                </div>
+                <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  {item.custom_year        && <span>Gads: {item.custom_year}</span>}
+                  {item.custom_denomination && <span>Nomināls: {item.custom_denomination}</span>}
+                  {item.custom_country      && <span>Valsts: {item.custom_country}</span>}
+                  {item.custom_material     && <span>Materiāls: {item.custom_material}</span>}
+                  <span style={{ color: "#94a3b8" }}>Iesniedzējs: {item.username}</span>
+                </div>
+                {item.custom_description && (
+                  <div style={{ fontSize: 12, color: "#374151", background: "#f8fafc", borderRadius: 6, padding: "4px 8px", marginBottom: 8 }}>
+                    {item.custom_description}
+                  </div>
+                )}
+
+                {isConfirming ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8,
+                    background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", border: "1px solid #86efac" }}>
+                    <span style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>
+                      Apstiprināt un novietot automātiski?
+                    </span>
+                    <button onClick={() => approve(item.id)} disabled={loading}
+                      style={{ padding: "5px 16px", borderRadius: 6, background: "#16a34a", color: "#fff",
+                        border: "none", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                      {loading ? "..." : "Jā"}
+                    </button>
+                    <button onClick={() => setConfirmId(null)} disabled={loading}
+                      style={{ padding: "5px 12px", borderRadius: 6, background: "#f1f5f9", color: "#374151",
+                        border: "1px solid #e2e8f0", cursor: "pointer", fontSize: 13 }}>
+                      Atcelt
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                    <button onClick={() => setConfirmId(item.id)}
+                      style={{ padding: "6px 16px", borderRadius: 6, background: "#16a34a", color: "#fff",
+                        border: "none", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                      ✓ Apstiprināt
+                    </button>
+                    <button onClick={() => dismiss(item.id)}
+                      style={{ padding: "6px 12px", borderRadius: 6, background: "#f1f5f9", color: "#94a3b8",
+                        border: "1.5px solid #e2e8f0", cursor: "pointer", fontSize: 13 }}>
+                      Noraidīt
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
+  );
+}
+
+// ── Numista import tab ────────────────────────────────────────────────────────
+const NUMISTA_CATS = [
+  { value: "coin",      label: "🪙 Monētas" },
+  { value: "banknote",  label: "💵 Banknotes" },
+  { value: "stamp",     label: "📮 Pastmarkas" },
+  { value: "exonumia",  label: "🏅 Exonumia" },
+];
+const NUMISTA_SECTION_MAP = { coin: "coins", banknote: "banknotes", stamp: "stamps", exonumia: "medals" };
+
+function NumistaTab() {
+  const [query, setQuery]           = useState("");
+  const [category, setCategory]     = useState("coin");
+  const [results, setResults]       = useState(null);
+  const [searching, setSearching]   = useState(false);
+  const [selected, setSelected]     = useState(null);
+  const [detail, setDetail]         = useState(null);
+  const [detailLoading, setDL]      = useState(false);
+  const [importing, setImporting]   = useState(false);
+  const [msg, setMsg]               = useState({ ok: null, err: null });
+
+  async function doSearch() {
+    if (!query.trim()) return;
+    setSearching(true); setResults(null); setSelected(null); setDetail(null); setMsg({});
+    try {
+      const r = await api.get("/admin/numista/search", { params: { q: query, category, lang: "en" } });
+      setResults(r.data);
+    } catch (e) {
+      setMsg({ err: e.response?.data?.detail || "Meklēšanas kļūda" });
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function selectCoin(coin) {
+    setSelected(coin); setDetail(null); setDL(true);
+    try {
+      const r = await api.get(`/admin/numista/type/${coin.id}`, { params: { lang: "en" } });
+      setDetail(r.data);
+    } catch {
+      setMsg({ err: "Nevar iegūt detaļas no Numista" });
+    } finally {
+      setDL(false);
+    }
+  }
+
+  async function doImport() {
+    setImporting(true); setMsg({});
+    try {
+      const r = await api.post("/admin/numista/import", {
+        numista_id: String(selected.id),
+      });
+      setMsg({ ok: `Importēts: ${r.data.name} (kataloga ID ${r.data.id})` });
+      setSelected(null); setDetail(null);
+    } catch (e) {
+      setMsg({ err: e.response?.data?.detail || "Importa kļūda" });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 920 }}>
+      {/* Search bar */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inp, width: 150 }}>
+          {NUMISTA_CATS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+        </select>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && doSearch()}
+          placeholder="Meklēt Numista (piem. Latvia 2 Lati)..."
+          style={{ ...inp, flex: 1 }}
+        />
+        <button onClick={doSearch} disabled={searching} style={{
+          padding: "7px 18px", borderRadius: 7, background: "#1e3a8a", color: "#fff",
+          fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", whiteSpace: "nowrap",
+        }}>
+          {searching ? "..." : "🔍 Meklēt"}
+        </button>
+      </div>
+
+      <Msg ok={msg.ok} err={msg.err} />
+
+      {/* Results grid */}
+      {results && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>
+            {results.count ?? (results.types?.length ?? 0)} rezultāti — noklikšķini uz monētas, lai importētu
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px,1fr))", gap: 10 }}>
+            {(results.types || []).map(coin => (
+              <div key={coin.id} onClick={() => selectCoin(coin)} style={{
+                border: `2px solid ${selected?.id === coin.id ? "#3b82f6" : "#e2e8f0"}`,
+                borderRadius: 10, padding: 10, cursor: "pointer", textAlign: "center",
+                background: selected?.id === coin.id ? "#eff6ff" : "#fff",
+              }}>
+                {coin.obverse_thumbnail
+                  ? <img src={coin.obverse_thumbnail} style={{ width: 64, height: 64, objectFit: "contain", marginBottom: 6 }} alt="" />
+                  : <div style={{ width: 64, height: 64, background: "#f1f5f9", margin: "0 auto 6px", borderRadius: 32,
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>🪙</div>
+                }
+                <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.3, marginBottom: 2 }}>{coin.title}</div>
+                <div style={{ fontSize: 10, color: "#94a3b8" }}>{coin.issuer?.name}</div>
+                <div style={{ fontSize: 10, color: "#94a3b8" }}>
+                  {coin.min_year}{coin.max_year && coin.max_year !== coin.min_year ? `–${coin.max_year}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Detail + import panel */}
+      {selected && (
+        <div style={{ ...card, background: "#f8fafc" }}>
+          {detailLoading && <p style={{ color: "#888" }}>Ielādē detaļas...</p>}
+          {detail && (
+            <>
+              <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {[detail.obverse_picture || detail.obverse?.picture, detail.reverse_picture || detail.reverse?.picture]
+                    .filter(Boolean).map((src, i) => (
+                      <img key={i} src={src}
+                        style={{ width: 100, height: 100, objectFit: "contain", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff" }}
+                        alt={i === 0 ? "Averse" : "Reverse"}
+                      />
+                    ))
+                  }
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{detail.title}</div>
+                  <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.8 }}>
+                    {[
+                      detail.issuer?.name && `🌍 ${detail.issuer.name}`,
+                      detail.min_year && `📅 ${detail.min_year}${detail.max_year && detail.max_year !== detail.min_year ? `–${detail.max_year}` : ""}`,
+                      detail.composition?.text && `⚗️ ${detail.composition.text}`,
+                      detail.weight && `⚖️ ${detail.weight}g`,
+                      detail.size && `⌀ ${detail.size}mm`,
+                    ].filter(Boolean).map((line, i) => <div key={i}>{line}</div>)}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Numista ID: {detail.id}</div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+                <button
+                  onClick={doImport}
+                  disabled={importing}
+                  style={{
+                    padding: "9px 24px", borderRadius: 8, border: "none",
+                    background: "#16a34a", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
+                  }}
+                >
+                  {importing ? "Importē..." : "⬇️ Importēt katalogā"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Premium tab ───────────────────────────────────────────────────────────────
+function PremiumTab() {
+  const qc = useQueryClient();
+  const [settings, setSettings] = useState(null);
+  const [form, setForm] = useState(null);
+  const [savedMsg, setSavedMsg] = useState(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [granting, setGranting] = useState(null); // user_id being granted
+  const [grantForm, setGrantForm] = useState({ plan: "manual", months: "" });
+
+  const { data: fetchedSettings, refetch: refetchSettings } = useQuery({
+    queryKey: ["admin-premium"],
+    queryFn: () => api.get("/admin/premium").then(r => r.data),
+  });
+  if (fetchedSettings && !settings) {
+    setSettings(fetchedSettings);
+    setForm({ ...fetchedSettings });
+  }
+
+  const { data: users = [], refetch: refetchUsers } = useQuery({
+    queryKey: ["admin-premium-users"],
+    queryFn: () => api.get("/admin/premium/users").then(r => r.data),
+  });
+
+  const saveMut = useMutation({
+    mutationFn: () => api.patch("/admin/premium", form),
+    onSuccess: (r) => {
+      setSettings(r.data);
+      setForm({ ...r.data });
+      setSavedMsg("Saglabāts!");
+      qc.invalidateQueries({ queryKey: ["admin-premium"] });
+      setTimeout(() => setSavedMsg(null), 2000);
+    },
+  });
+
+  async function grantSub(userId) {
+    await api.post(`/admin/premium/grant/${userId}`, {
+      plan: grantForm.plan,
+      months: grantForm.months ? Number(grantForm.months) : null,
+    });
+    setGranting(null);
+    setGrantForm({ plan: "manual", months: "" });
+    refetchUsers();
+  }
+
+  async function revokeSub(userId) {
+    if (!window.confirm("Atsaukt abonementu?")) return;
+    await api.delete(`/admin/premium/revoke/${userId}`);
+    refetchUsers();
+  }
+
+  const filtered = users.filter(u =>
+    !userSearch || u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.email.toLowerCase().includes(userSearch.toLowerCase())
+  );
+
+  const planLabel = { monthly: "Mēneša", yearly: "Gada", manual: "Manuāls" };
+
+  return (
+    <div style={{ maxWidth: 860 }}>
+      {/* Settings card */}
+      <div style={card}>
+        <h3 style={{ fontWeight: 800, fontSize: 16, marginBottom: 16 }}>⚙️ Premium iestatījumi</h3>
+        {form && (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                <div onClick={() => setForm(f => ({ ...f, premium_enabled: !f.premium_enabled }))} style={{
+                  width: 48, height: 26, borderRadius: 13, background: form.premium_enabled ? "#16a34a" : "#cbd5e1",
+                  position: "relative", cursor: "pointer", transition: "background .2s", flexShrink: 0,
+                }}>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: "50%", background: "#fff",
+                    position: "absolute", top: 3, left: form.premium_enabled ? 25 : 3,
+                    transition: "left .2s", boxShadow: "0 1px 3px rgba(0,0,0,.2)",
+                  }} />
+                </div>
+                <span style={{ fontWeight: 700, fontSize: 15, color: form.premium_enabled ? "#16a34a" : "#64748b" }}>
+                  {form.premium_enabled ? "Premium ieslēgts" : "Premium izslēgts"}
+                </span>
+              </label>
+              {form.premium_enabled && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#64748b", paddingLeft: 60 }}>
+                  Lietotāji, kas sasnieguši limitu, nevar pievienot jaunus priekšmetus bez abonēšanas
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
+              <Inp label="Bezmaksas limits (priekšmeti)" value={String(form.premium_free_limit || "")}
+                onChange={e => setForm(f => ({ ...f, premium_free_limit: Number(e.target.value) || 0 }))} type="number" />
+              <Inp label="Mēneša cena (€)" value={String(form.premium_price_monthly || "")}
+                onChange={e => setForm(f => ({ ...f, premium_price_monthly: parseFloat(e.target.value) || 0 }))} type="number" />
+              <Inp label="Gada cena (€)" value={String(form.premium_price_yearly || "")}
+                onChange={e => setForm(f => ({ ...f, premium_price_yearly: parseFloat(e.target.value) || 0 }))} type="number" />
+            </div>
+
+            <button className="btn btn-primary" onClick={() => { setSavedMsg(null); saveMut.mutate(); }} disabled={saveMut.isPending}>
+              {saveMut.isPending ? "Saglabā..." : savedMsg ? `✅ ${savedMsg}` : "💾 Saglabāt"}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Users list */}
+      <div style={card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h3 style={{ fontWeight: 800, fontSize: 16 }}>👥 Lietotāji ({users.length})</h3>
+          <input placeholder="🔍 Meklēt..." value={userSearch} onChange={e => setUserSearch(e.target.value)}
+            style={{ ...inp, width: 200, padding: "6px 10px" }} />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {filtered.map(u => {
+            const hasSub = !!u.subscription;
+            const isOver = form && u.item_count >= (form.premium_free_limit || 50);
+            const isGranting = granting === u.id;
+
+            return (
+              <div key={u.id} style={{
+                border: `1.5px solid ${hasSub ? "#86efac" : isOver && form?.premium_enabled ? "#fca5a5" : "#e2e8f0"}`,
+                borderRadius: 10, padding: "10px 14px",
+                background: hasSub ? "#f0fdf4" : isOver && form?.premium_enabled ? "#fff5f5" : "#fafafa",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>{u.username}</span>
+                    {u.is_admin && <span style={{ marginLeft: 6, fontSize: 10, background: "#fef3c7", color: "#92400e", padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>admin</span>}
+                    <span style={{ marginLeft: 8, fontSize: 12, color: "#64748b" }}>{u.email}</span>
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+                      {u.item_count} priekšmeti
+                      {form?.premium_free_limit > 0 && (
+                        <span style={{ marginLeft: 6, color: isOver ? "#dc2626" : "#16a34a" }}>
+                          ({isOver ? "virs limita" : `${form.premium_free_limit - u.item_count} brīvi`})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {hasSub ? (
+                      <>
+                        <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 700 }}>
+                          ✅ {planLabel[u.subscription.plan] || u.subscription.plan}
+                          {u.subscription.end_date && ` · līdz ${u.subscription.end_date.slice(0, 10)}`}
+                          {!u.subscription.end_date && " · beztermiņa"}
+                        </span>
+                        <button onClick={() => revokeSub(u.id)} style={{
+                          padding: "4px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+                          border: "1.5px solid #fca5a5", background: "#fff1f2", color: "#dc2626", fontWeight: 600,
+                        }}>Atsaukt</button>
+                      </>
+                    ) : (
+                      <button onClick={() => { setGranting(isGranting ? null : u.id); setGrantForm({ plan: "manual", months: "" }); }} style={{
+                        padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+                        border: "1.5px solid #7c3aed", background: isGranting ? "#f5f3ff" : "#faf5ff",
+                        color: "#7c3aed", fontWeight: 600,
+                      }}>+ Piešķirt</button>
+                    )}
+                  </div>
+                </div>
+
+                {isGranting && (
+                  <div style={{ marginTop: 10, padding: "10px 12px", background: "#f5f3ff", borderRadius: 8, display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <label style={lbl}>Plāns</label>
+                      <select value={grantForm.plan} onChange={e => setGrantForm(f => ({ ...f, plan: e.target.value }))} style={{ ...inp, fontSize: 13, padding: "5px 8px" }}>
+                        <option value="manual">Manuāls (beztermiņa)</option>
+                        <option value="monthly">Mēneša</option>
+                        <option value="yearly">Gada</option>
+                      </select>
+                    </div>
+                    {grantForm.plan !== "manual" && (
+                      <div style={{ minWidth: 100 }}>
+                        <label style={lbl}>{grantForm.plan === "monthly" ? "Mēneši" : "Gadi"}</label>
+                        <input type="number" min={1} value={grantForm.months}
+                          onChange={e => setGrantForm(f => ({ ...f, months: e.target.value }))}
+                          style={{ ...inp, fontSize: 13, padding: "5px 8px" }} />
+                      </div>
+                    )}
+                    <button onClick={() => grantSub(u.id)} style={{
+                      padding: "6px 16px", borderRadius: 6, background: "#7c3aed", color: "#fff",
+                      border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 1,
+                    }}>Piešķirt</button>
+                    <button onClick={() => setGranting(null)} style={{
+                      padding: "6px 12px", borderRadius: 6, background: "#f1f5f9", color: "#374151",
+                      border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", marginBottom: 1,
+                    }}>Atcelt</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1346,6 +1962,10 @@ export default function Admin() {
   const [selected, setSelected] = useState(null);
   const [adminLayout, setAdminLayout] = useState("list"); // "list" | "matrix"
   const [addPrefill, setAddPrefill] = useState(null);
+  const [checkedIds, setCheckedIds] = useState(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const qc = useQueryClient();
 
   // Finds continent + country IDs for a given period in the tree
   function treeLocate(section, periodId) {
@@ -1438,6 +2058,8 @@ export default function Admin() {
         {tabBtn("catalog", "📋 Katalogs")}
         {tabBtn("add", "➕ Pievienot")}
         {tabBtn("structure", "🗂️ Struktūra")}
+        {tabBtn("numista", "🔍 Numista")}
+        {tabBtn("premium", "💎 Premium")}
         <button onClick={() => setTab("pending")} style={{
           padding: "8px 20px", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: "pointer",
           background: tab === "pending" ? "#dc2626" : (pending.length + pendingCatalog.length > 0 ? "#fef2f2" : "#f1f5f9"),
@@ -1474,6 +2096,57 @@ export default function Admin() {
                 <p style={{ color: "#94a3b8", textAlign: "center", paddingTop: 40 }}>Nav atrasts neviens ieraksts</p>
               )}
 
+              {/* ── Bulk delete bar ── */}
+              {adminLayout === "list" && checkedIds.size > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10,
+                  background: bulkConfirm ? "#fef2f2" : "#fff7ed",
+                  border: `1.5px solid ${bulkConfirm ? "#fca5a5" : "#fdba74"}`,
+                  borderRadius: 10, padding: "8px 14px" }}>
+                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>
+                    {bulkConfirm
+                      ? `⚠️ Tiešām dzēst ${checkedIds.size} ierakstus? Šo nevar atcelt!`
+                      : `Atzīmēti ${checkedIds.size} ieraksti`}
+                  </span>
+                  {!bulkConfirm ? (
+                    <>
+                      <button onClick={() => setBulkConfirm(true)} style={{
+                        padding: "5px 14px", borderRadius: 7, fontWeight: 700, fontSize: 13,
+                        background: "#dc2626", color: "#fff", border: "none", cursor: "pointer" }}>
+                        🗑️ Dzēst
+                      </button>
+                      <button onClick={() => { setCheckedIds(new Set()); setBulkConfirm(false); }} style={{
+                        padding: "5px 14px", borderRadius: 7, fontWeight: 600, fontSize: 13,
+                        background: "#f1f5f9", color: "#374151", border: "1.5px solid #e2e8f0", cursor: "pointer" }}>
+                        Atcelt
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button disabled={bulkDeleting} onClick={async () => {
+                        setBulkDeleting(true);
+                        for (const id of checkedIds) {
+                          try { await api.delete(`/admin/catalog/${id}`); } catch {}
+                        }
+                        setCheckedIds(new Set());
+                        setBulkConfirm(false);
+                        setBulkDeleting(false);
+                        setSelected(null);
+                        qc.invalidateQueries({ queryKey: ["admin-catalog"] });
+                      }} style={{
+                        padding: "5px 14px", borderRadius: 7, fontWeight: 700, fontSize: 13,
+                        background: bulkDeleting ? "#9ca3af" : "#991b1b", color: "#fff", border: "none", cursor: bulkDeleting ? "not-allowed" : "pointer" }}>
+                        {bulkDeleting ? "Dzēš..." : "Jā, dzēst!"}
+                      </button>
+                      <button onClick={() => setBulkConfirm(false)} style={{
+                        padding: "5px 14px", borderRadius: 7, fontWeight: 600, fontSize: 13,
+                        background: "#f1f5f9", color: "#374151", border: "1.5px solid #e2e8f0", cursor: "pointer" }}>
+                        Nē
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
               {adminLayout === "matrix" ? (
                 <MatrixView
                   items={items}
@@ -1483,35 +2156,62 @@ export default function Admin() {
                   onAddDenom={() => openAdd("", "")}
                 />
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {items.map(item => (
-                    <div key={item.id} onClick={() => setSelected(selected?.id === item.id ? null : item)}
-                      style={{ background: selected?.id === item.id ? "#eff6ff" : "#fff",
-                        border: `1.5px solid ${selected?.id === item.id ? "#3b82f6" : "#e2e8f0"}`,
-                        borderRadius: 10, padding: "10px 14px", cursor: "pointer",
-                        display: "flex", alignItems: "center", gap: 12, transition: "border-color .15s" }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 6, overflow: "hidden",
-                        background: "#f1f5f9", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {item.image_url
-                          ? <img src={item.image_url.startsWith("http") ? item.image_url : BASE + item.image_url}
-                              style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="" />
-                          : <span style={{ fontSize: 20 }}>{item.section === "coins" ? "🪙" : item.section === "medals" ? "🏅" : "📮"}</span>
-                        }
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
-                        <div style={{ fontSize: 12, color: "#64748b" }}>
-                          {[item.year, item.denomination].filter(Boolean).join(" · ")}
-                          {item.admin_edited && <span style={{ marginLeft: 8, color: "#d97706", fontSize: 11 }}>🔒</span>}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        {item.image_url && <span style={{ fontSize: 10, background: "#f0fdf4", color: "#16a34a", padding: "2px 6px", borderRadius: 10, fontWeight: 700 }}>OB</span>}
-                        {item.image_url_reverse && <span style={{ fontSize: 10, background: "#f0fdf4", color: "#16a34a", padding: "2px 6px", borderRadius: 10, fontWeight: 700 }}>REV</span>}
-                      </div>
+                <>
+                  {items.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <button onClick={() => {
+                        if (checkedIds.size === items.length) { setCheckedIds(new Set()); setBulkConfirm(false); }
+                        else setCheckedIds(new Set(items.map(i => i.id)));
+                      }} style={{
+                        padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                        background: "#f1f5f9", color: "#374151", border: "1.5px solid #e2e8f0" }}>
+                        {checkedIds.size === items.length ? "Noatzīmēt visus" : "Atzīmēt visus"}
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {items.map(item => {
+                      const isChecked = checkedIds.has(item.id);
+                      return (
+                        <div key={item.id} onClick={() => setSelected(selected?.id === item.id ? null : item)}
+                          style={{ background: isChecked ? "#fef9c3" : selected?.id === item.id ? "#eff6ff" : "#fff",
+                            border: `1.5px solid ${isChecked ? "#fbbf24" : selected?.id === item.id ? "#3b82f6" : "#e2e8f0"}`,
+                            borderRadius: 10, padding: "10px 14px", cursor: "pointer",
+                            display: "flex", alignItems: "center", gap: 12, transition: "border-color .15s" }}>
+                          <input type="checkbox" checked={isChecked}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => {
+                              e.stopPropagation();
+                              const next = new Set(checkedIds);
+                              if (e.target.checked) next.add(item.id); else next.delete(item.id);
+                              setCheckedIds(next);
+                              if (!e.target.checked) setBulkConfirm(false);
+                            }}
+                            style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer", accentColor: "#dc2626" }} />
+                          <div style={{ width: 48, height: 48, borderRadius: 6, overflow: "hidden",
+                            background: "#f1f5f9", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {item.image_url
+                              ? <img src={item.image_url.startsWith("http") ? item.image_url : BASE + item.image_url}
+                                  style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="" />
+                              : <span style={{ fontSize: 20 }}>{item.section === "coins" ? "🪙" : item.section === "medals" ? "🏅" : "📮"}</span>
+                            }
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
+                            <div style={{ fontSize: 12, color: "#64748b" }}>
+                              {[item.year, item.denomination].filter(Boolean).join(" · ")}
+                              {item.admin_edited && <span style={{ marginLeft: 8, color: "#d97706", fontSize: 11 }}>🔒</span>}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                            {item.image_url && <span style={{ fontSize: 10, background: "#f0fdf4", color: "#16a34a", padding: "2px 6px", borderRadius: 10, fontWeight: 700 }}>OB</span>}
+                            {item.image_url_reverse && <span style={{ fontSize: 10, background: "#f0fdf4", color: "#16a34a", padding: "2px 6px", borderRadius: 10, fontWeight: 700 }}>REV</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
             {selected && (
@@ -1525,6 +2225,10 @@ export default function Admin() {
 
       {/* ── Structure tab ── */}
       {tab === "structure" && <StructureTab />}
+
+      {/* ── Numista import tab ── */}
+      {tab === "numista" && <NumistaTab />}
+      {tab === "premium" && <PremiumTab />}
 
       {/* ── Pending submissions tab ── */}
       {tab === "pending" && (

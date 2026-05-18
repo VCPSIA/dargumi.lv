@@ -1,4 +1,5 @@
-﻿import { useState } from "react";
+import { useState } from "react";
+import { denomVal } from "../utils/denomSort";
 
 const BASE = "http://localhost:8001";
 
@@ -9,20 +10,12 @@ function shortDenom(d) {
   if (!m) return s;
   const n = m[0];
   const low = s.toLowerCase();
+  if (low.includes("santīm") || low.includes("santim")) return `${n}s`;
+  if (low.includes("lats") || low.includes("lati") || /\blat\b/.test(low)) return `${n}Ls`;
   if (low.includes("eiro cent") || low.includes("euro cent")) return `${n}¢`;
-  if (low.includes("eiro") || low.includes("euro"))           return `${n}€`;
-  if (low.includes("cent"))                                   return `${n}ct`;
-  if (low.includes("lit"))                                    return `${n}Lt`;
+  if (low.includes("eiro") || low.includes("euro")) return `${n}€`;
+  if (low.includes("cent") || /\bct\b/.test(low)) return `${n}ct`;
   return s;
-}
-
-function denomVal(d) {
-  if (!d) return Infinity;
-  const s = String(d);
-  const m = s.match(/[\d.,]+/);
-  const num = m ? parseFloat(m[0].replace(",", ".")) : Infinity;
-  // centi pirms litiem/eiro
-  return s.toLowerCase().includes("cent") ? num : 1000 + num;
 }
 
 function getImgSrc(item, userPhotoMap) {
@@ -41,33 +34,39 @@ const addBtn = {
 
 /**
  * MatrixView — year × denomination grid
- * Props:
- *   items        — catalog item list
- *   userPhotoMap — optional { id → url }
- *   onSelect(item)         — click filled cell
- *   onEmpty(year, denom)   — click "+" in empty cell (admin: add with both prefilled)
- *   onAddYear()            — click "+ Gads" footer button
- *   onAddDenom()           — click "+ Nomināls" header button
+ * Rindas = gadi (vecākie augšā, jaunākie apakšā)
+ * Kolonnas = nominālvērtības (mazākās kreisajā, lielākās labajā)
  */
 export default function MatrixView({ items, userPhotoMap = {}, onSelect, onEmpty, onAddYear, onAddDenom }) {
   const [hoveredId, setHoveredId] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [tooltipPos, setTooltipPos] = useState(null);
+  const [yearAsc, setYearAsc] = useState(true);
 
   const isAdmin = !!(onAddYear || onAddDenom);
 
   const matrixItems = items.filter(i => i.year && i.denomination);
 
   const years = [...new Set(matrixItems.map(i => i.year))].sort(
-    (a, b) => (parseInt(b) || 0) - (parseInt(a) || 0)
-  );
-  const denoms = [...new Set(matrixItems.map(i => i.denomination))].sort(
-    (a, b) => denomVal(a) - denomVal(b)
+    (a, b) => yearAsc
+      ? (parseInt(a) || 0) - (parseInt(b) || 0)
+      : (parseInt(b) || 0) - (parseInt(a) || 0)
   );
 
+  // Deduplikācija pēc shortDenom — "1 santīms" un "1 santīmi" → viena kolonna
+  const denomShortMap = new Map(); // shortDenom → pirmā pilnā virkne (denomVal kārtošanai)
+  for (const item of matrixItems) {
+    const s = shortDenom(item.denomination);
+    if (s && !denomShortMap.has(s)) denomShortMap.set(s, item.denomination);
+  }
+  const denoms = [...denomShortMap.keys()].sort(
+    (a, b) => denomVal(denomShortMap.get(a)) - denomVal(denomShortMap.get(b))
+  );
+
+  // cellMap atslēga: gads__shortDenom
   const cellMap = {};
   for (const item of matrixItems) {
-    const key = `${item.year}__${item.denomination}`;
+    const key = `${item.year}__${shortDenom(item.denomination)}`;
     const existing = cellMap[key];
     if (!existing || (!existing.image_url && item.image_url)) {
       cellMap[key] = item;
@@ -102,7 +101,6 @@ export default function MatrixView({ items, userPhotoMap = {}, onSelect, onEmpty
 
   return (
     <>
-      {/* Floating tooltip */}
       {hoveredItem && tooltipPos && (() => {
         const imgSrc = getImgSrc(hoveredItem, userPhotoMap);
         if (!imgSrc) return null;
@@ -121,6 +119,11 @@ export default function MatrixView({ items, userPhotoMap = {}, onSelect, onEmpty
             <div style={{ fontSize: 11, color: "#64748b", textAlign: "center", marginTop: 5, maxWidth: 100, lineHeight: 1.3 }}>
               {hoveredItem.name}
             </div>
+            {hoveredItem.avg_price != null && (
+              <div style={{ fontSize: 11, color: "#7c3aed", fontWeight: 700, textAlign: "center", marginTop: 3 }}>
+                ~€{hoveredItem.avg_price.toFixed(2)}
+              </div>
+            )}
           </div>
         );
       })()}
@@ -129,23 +132,28 @@ export default function MatrixView({ items, userPhotoMap = {}, onSelect, onEmpty
         <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%" }}>
           <thead>
             <tr>
-              {/* Corner cell */}
               <th style={{
                 ...th, borderRight: "2px solid #e2e8f0",
                 position: "sticky", left: 0, zIndex: 3,
                 fontSize: 10, color: "#94a3b8",
               }}>
-                <div>Gads ↓</div><div>Nomināls →</div>
+                <div
+                  onClick={() => setYearAsc(v => !v)}
+                  title={yearAsc ? "Mainīt: jaunākie augšā" : "Mainīt: vecākie augšā"}
+                  style={{ cursor: "pointer", userSelect: "none", display: "inline-flex", alignItems: "center", gap: 3 }}
+                >
+                  <span>Gads</span>
+                  <span style={{ fontSize: 12 }}>{yearAsc ? "↓" : "↑"}</span>
+                </div>
+                <div>Nom. →</div>
               </th>
 
-              {/* Denomination columns */}
               {denoms.map(d => (
-                <th key={d} style={{ ...th, borderRight: "1px solid #e2e8f0", minWidth: 44 }} title={d}>
-                  {shortDenom(d)}
+                <th key={d} style={{ ...th, borderRight: "1px solid #e2e8f0", minWidth: 44 }} title={denomShortMap.get(d) || d}>
+                  {d}
                 </th>
               ))}
 
-              {/* "+ Nomināls" column header (admin only) */}
               {onAddDenom && (
                 <th style={{ ...th, borderRight: "none", minWidth: 44 }}>
                   <div
@@ -165,7 +173,6 @@ export default function MatrixView({ items, userPhotoMap = {}, onSelect, onEmpty
               const rowBg = yi % 2 === 0 ? "#fff" : "#fafafa";
               return (
                 <tr key={year}>
-                  {/* Year label — sticky left */}
                   <td style={{
                     padding: "5px 8px", fontWeight: 700, color: "#374151", fontSize: 11,
                     borderRight: "2px solid #e2e8f0", borderBottom: "1px solid #f1f5f9",
@@ -222,18 +229,16 @@ export default function MatrixView({ items, userPhotoMap = {}, onSelect, onEmpty
                             color: isHov ? "#1e40af" : "#166534",
                             whiteSpace: "nowrap", transition: "all .1s",
                           }}
-                        >{shortDenom(d)}</div>
+                        >{d}</div>
                       </td>
                     );
                   })}
 
-                  {/* Empty cell in "+ Nomināls" column */}
                   {onAddDenom && <td style={{ borderBottom: "1px solid #f1f5f9", background: rowBg }} />}
                 </tr>
               );
             })}
 
-            {/* "+ Gads" footer row (admin only) */}
             {onAddYear && (
               <tr>
                 <td style={{
@@ -258,4 +263,3 @@ export default function MatrixView({ items, userPhotoMap = {}, onSelect, onEmpty
     </>
   );
 }
-

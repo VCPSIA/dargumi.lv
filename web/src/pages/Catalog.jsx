@@ -1,5 +1,5 @@
 ﻿import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api";
@@ -9,6 +9,7 @@ import GeoNav from "../components/GeoNav";
 import ZoomableImage from "../components/ZoomableImage";
 import RecognizeModal from "../components/RecognizeModal";
 import MatrixView from "../components/MatrixView";
+import { denomVal } from "../utils/denomSort";
 
 const BASE = "http://localhost:8001";
 
@@ -22,19 +23,59 @@ const CAT_DEFS = [
 // ── Detail modal (info only) ───────────────────────────────────────────────────
 function CatalogDetailModal({ item, countryName, countryCode, periodName, onClose }) {
   const { t } = useTranslation();
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  const token = localStorage.getItem("token");
 
   const { data: priceData } = useQuery({
     queryKey: ["avg-price", item.id],
     queryFn: () => api.get(`/catalog/items/${item.id}/avg_price`).then(r => r.data),
   });
 
-  // User photo for display
-  const { data: userItems = [] } = useQuery({
+  const materialLower = (item.material || "").toLowerCase();
+  const metalType = materialLower.includes("gold") ? "gold"
+    : materialLower.includes("silver") ? "silver"
+    : null;
+  const { data: metalPrice } = useQuery({
+    queryKey: ["metal-price", metalType],
+    queryFn: () => api.get(`/catalog/metal-price?metal=${metalType}`).then(r => r.data),
+    enabled: !!metalType,
+    staleTime: 5 * 60 * 1000,
+  });
+  const [metalUnit, setMetalUnit] = useState("oz");
+  const [metalCurrency, setMetalCurrency] = useState("USD");
+
+  function formatMetalPrice(data) {
+    if (!data) return "...";
+    const OZ_TO_G = 31.1035;
+    let price = data.price_usd_oz;
+    if (metalUnit === "g") price = price / OZ_TO_G;
+    if (metalCurrency === "EUR") price = price * data.eur_usd_rate;
+    const sym = metalCurrency === "EUR" ? "€" : "$";
+    const unit = metalUnit === "g" ? "g" : "oz";
+    return `${sym}${price.toFixed(metalUnit === "g" ? 3 : 2)}/${unit}`;
+  }
+
+  const { data: userItems = [], refetch: refetchUserItems } = useQuery({
     queryKey: ["collection-for-catalog", item.id],
     queryFn: () => api.get("/collection", { params: { catalog_item_id: item.id } }).then(r => r.data),
+    enabled: !!token,
     retry: false,
   });
-  const userItem = userItems[0];
+  const userItem = userItems.find(i => i.item_type === "collection");
+
+  const addMutation = useMutation({
+    mutationFn: () => api.post("/collection", {
+      catalog_item_id: item.id,
+      section: item.section,
+      coin_category: item.coin_category || "circulation",
+      item_type: "collection",
+    }),
+    onSuccess: () => {
+      refetchUserItems();
+      qc.invalidateQueries({ queryKey: ["collection"] });
+    },
+  });
   const userObUrl = userItem?.user_image ? BASE + userItem.user_image : null;
   const userRevUrl = userItem?.user_image_reverse ? BASE + userItem.user_image_reverse : null;
 
@@ -51,6 +92,8 @@ function CatalogDetailModal({ item, countryName, countryCode, periodName, onClos
     [t("fields.weight"), item.weight_g && `${item.weight_g} g`],
     [t("fields.mint"), item.mint],
     [t("fields.mintage"), item.mintage],
+    [t("fields.designer"), item.designer],
+    [t("fields.engraver"), item.engraver],
     [t("fields.catalogNo"), item.catalog_number],
     [t("fields.obverse"), item.obverse_description],
     [t("fields.reverse"), item.reverse_description],
@@ -124,11 +167,75 @@ function CatalogDetailModal({ item, countryName, countryCode, periodName, onClos
               {fields.map(([k, v]) => (
                 <tr key={k} style={{ borderBottom: "1px solid #f1f5f9" }}>
                   <td style={{ padding: "7px 0", fontWeight: 600, color: "#64748b", width: "42%", verticalAlign: "top" }}>{k}</td>
-                  <td style={{ padding: "7px 0" }}>{String(v)}</td>
+                  <td style={{ padding: "7px 0", whiteSpace: "pre-wrap" }}>{String(v)}</td>
                 </tr>
               ))}
+              {metalType && (
+                <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "7px 0", fontWeight: 600, color: "#64748b", width: "42%", verticalAlign: "middle" }}>
+                    {metalType === "gold" ? t("fields.goldPrice") : t("fields.silverPrice")}
+                  </td>
+                  <td style={{ padding: "7px 0" }}>
+                    <span style={{ marginRight: 8 }}>{formatMetalPrice(metalPrice)}</span>
+                    <span style={{ display: "inline-flex", gap: 3 }}>
+                      {["oz", "g"].map(u => (
+                        <button key={u} onClick={() => setMetalUnit(u)} style={{
+                          padding: "1px 7px", fontSize: 11, borderRadius: 6, cursor: "pointer",
+                          border: "1.5px solid #cbd5e1",
+                          background: metalUnit === u ? "#1e40af" : "#f8fafc",
+                          color: metalUnit === u ? "#fff" : "#475569",
+                          fontWeight: 600,
+                        }}>{u}</button>
+                      ))}
+                      {["USD", "EUR"].map(c => (
+                        <button key={c} onClick={() => setMetalCurrency(c)} style={{
+                          padding: "1px 7px", fontSize: 11, borderRadius: 6, cursor: "pointer",
+                          border: "1.5px solid #cbd5e1",
+                          background: metalCurrency === c ? "#1e40af" : "#f8fafc",
+                          color: metalCurrency === c ? "#fff" : "#475569",
+                          fontWeight: 600,
+                        }}>{c}</button>
+                      ))}
+                    </span>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+
+          <div style={{ marginTop: 20 }}>
+            {!token ? (
+              <button
+                onClick={() => { onClose(); nav("/login"); }}
+                style={{
+                  width: "100%", padding: "11px 0", borderRadius: 10, border: "none",
+                  background: "#f1f5f9", color: "#374151", fontWeight: 700, fontSize: 15, cursor: "pointer",
+                }}>
+                🔑 Ieiet, lai pievienotu kolekcijai
+              </button>
+            ) : userItem ? (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                background: "#f0fdf4", border: "1.5px solid #86efac",
+                borderRadius: 10, padding: "10px 16px", fontSize: 14,
+                color: "#16a34a", fontWeight: 600,
+              }}>
+                <span style={{ fontSize: 18 }}>✓</span>
+                <span>Ir manā kolekcijā</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => addMutation.mutate()}
+                disabled={addMutation.isPending}
+                style={{
+                  width: "100%", padding: "11px 0", borderRadius: 10, border: "none",
+                  background: addMutation.isPending ? "#94a3b8" : "#2563eb",
+                  color: "#fff", fontWeight: 700, fontSize: 15, cursor: addMutation.isPending ? "not-allowed" : "pointer",
+                }}>
+                {addMutation.isPending ? "..." : "➕ Pievienot manai kolekcijai"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -140,41 +247,44 @@ function CatalogDetailModal({ item, countryName, countryCode, periodName, onClos
 export default function Catalog() {
   const { t } = useTranslation();
   const nav = useNavigate();
-  const [geoFilter, setGeoFilter] = useState({});  // { openContinentId, countryId, countryCode, countryName, periodName }
+  const token = localStorage.getItem("token");
+  const [geoFilter, setGeoFilter] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("catalog-geo-filter")) || {}; } catch { return {}; }
+  });
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState(null);
+  const openItem = (item) => nav(`/catalog/${item.id}`, { state: { item, countryName: geoFilter.countryName || null, countryCode: geoFilter.countryCode || null, periodName: geoFilter.periodName || null } });
   const [layout, setLayout] = useState("3");
   const [showRecognize, setShowRecognize] = useState(false);
 
   const hasCountry = !!geoFilter.countryId;
-  const hasPeriod  = !!geoFilter.periodName;
+  const hasPeriod  = !!geoFilter.periodId;
 
   const params = {};
-  if (hasCountry) params.country_id = geoFilter.countryId;
+  if (hasPeriod) {
+    params.period_id = geoFilter.periodId;
+  } else if (hasCountry) {
+    params.country_id = geoFilter.countryId;
+  }
+  if (geoFilter.coinCategory) params.coin_category = geoFilter.coinCategory;
   if (search) params.search = search;
 
-  const { data: allItems = [], isLoading } = useQuery({
+  const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ["catalog-items", params],
     queryFn: () => api.get("/catalog/items", { params }).then(r => r.data),
     enabled: hasCountry || !!search,
   });
 
-  // Client-side filter by period name if selected
-  const items = hasPeriod
-    ? allItems.filter(item => {
-        // item doesn't directly have period name — need to match via period_id
-        // We rely on the fact that when a period is selected, we show items from that country
-        // and filter by period name would require period info on item
-        // Since catalog items don't include period name, we skip period filtering here
-        // and show all items for the country (period nav is just for navigation UX)
-        return true;
-      })
-    : allItems;
+  const items = [...rawItems].sort((a, b) => {
+    const dv = denomVal(b.denomination) - denomVal(a.denomination);
+    if (dv !== 0) return dv;
+    return (parseInt(a.year) || 0) - (parseInt(b.year) || 0);
+  });
 
   // User's collection items — for photos and ownership badges
   const { data: userCollItems = [] } = useQuery({
     queryKey: ["collection"],
     queryFn: () => api.get("/collection", { params: { } }).then(r => r.data),
+    enabled: !!token,
     retry: 1,
   });
   const userPhotoMap = {};
@@ -190,7 +300,7 @@ export default function Catalog() {
 
   function handleGeoSelect(f) {
     setGeoFilter(f);
-    setSelected(null);
+    sessionStorage.setItem("catalog-geo-filter", JSON.stringify(f));
   }
 
   const totalDisplay = items.length;
@@ -262,7 +372,7 @@ export default function Catalog() {
                 <MatrixView
                   items={items}
                   userPhotoMap={userPhotoMap}
-                  onSelect={setSelected}
+                  onSelect={openItem}
                 />
               ) : layout !== "list" ? (
                 <div className={`grid-${layout}`}>
@@ -272,7 +382,7 @@ export default function Catalog() {
                     const imgSrc = catImg || userPhotoMap[item.id] || null;
                     const owned = ownedMap[item.id];
                     return (
-                    <div key={item.id} className="card" onClick={() => setSelected(item)}
+                    <div key={item.id} className="card" onClick={() => openItem(item)}
                       style={{ cursor: "pointer", position: "relative" }}
                       onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.12)"; }}
                       onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}>
@@ -293,7 +403,16 @@ export default function Catalog() {
                       <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
                         {[geoFilter.countryName ? `${flagEmoji(geoFilter.countryCode)} ${geoFilter.countryName}` : null, item.year].filter(Boolean).join(" · ")}
                       </div>
-                      {item.denomination && !compact && <div className="tag" style={{ marginTop: 6, fontSize: 11 }}>{item.denomination}</div>}
+                      {!compact && (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+                          {item.denomination && <div className="tag" style={{ fontSize: 11 }}>{item.denomination}</div>}
+                          {item.avg_price != null && (
+                            <div style={{ fontSize: 10, color: "#7c3aed", fontWeight: 700 }}>
+                              ~€{item.avg_price.toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     );
                   })}
@@ -305,7 +424,7 @@ export default function Catalog() {
                     const imgSrc = catImg || userPhotoMap[item.id] || null;
                     const owned = ownedMap[item.id];
                     return (
-                      <div key={item.id} onClick={() => setSelected(item)}
+                      <div key={item.id} onClick={() => openItem(item)}
                         style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
                           background: owned?.collection ? "#f0fdf4" : "#fff",
                           border: `1px solid ${owned?.collection ? "#86efac" : "#e2e8f0"}`,
@@ -326,6 +445,11 @@ export default function Catalog() {
                           </div>
                         </div>
                         {item.denomination && <div className="tag" style={{ fontSize: 11, flexShrink: 0 }}>{item.denomination}</div>}
+                        {item.avg_price != null && (
+                          <span style={{ fontSize: 11, color: "#7c3aed", fontWeight: 700, flexShrink: 0 }}>
+                            ~€{item.avg_price.toFixed(2)}
+                          </span>
+                        )}
                         {owned?.collection && (
                           <span style={{ fontSize: 11, fontWeight: 700, background: "#f0fdf4", color: "#16a34a",
                             padding: "2px 8px", borderRadius: 20, flexShrink: 0 }}>
@@ -341,16 +465,6 @@ export default function Catalog() {
           )}
         </div>
       </div>
-
-      {selected && (
-        <CatalogDetailModal
-          item={selected}
-          countryName={geoFilter.countryName || null}
-          countryCode={geoFilter.countryCode || null}
-          periodName={geoFilter.periodName || null}
-          onClose={() => setSelected(null)}
-        />
-      )}
 
       {showRecognize && (
         <RecognizeModal

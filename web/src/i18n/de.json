@@ -37,6 +37,7 @@
     "add": "➕ Hinzufügen",
     "search": "🔍 Suchen...",
     "allConditions": "Alle Zustände",
+    "allDenominations": "Alle Nennwerte",
     "empty": "Sammlung ist leer. Fotografieren Sie ein Objekt!",
     "noResults": "Keine Objekte in dieser Auswahl.",
     "all": "📦 Alle",
@@ -63,6 +64,8 @@
     "weight": "Gewicht",
     "mint": "Münzstätte",
     "mintage": "Auflage",
+    "designer": "Designer",
+    "engraver": "Graveur",
     "catalogNo": "Katalog-Nr.",
     "description": "Beschreibung",
     "obverse": "Vorderseite",
@@ -74,6 +77,9 @@
     "perforation": "Perforation",
     "color": "Farbe",
     "avgPrice": "Durchschnittlicher Marktpreis",
+    "goldPrice": "Goldpreis (aktuell)",
+    "silverPrice": "Silberpreis (aktuell)",
+    "metalMinValue": "Mindestwert (Metallgehalt)",
     "myPrice": "Mein Kaufpreis",
     "collectors": "Sammler"
   },
@@ -111,7 +117,29 @@
     "noAccount": "Kein Konto?",
     "hasAccount": "Haben Sie bereits ein Konto?",
     "registerLink": "Registrieren",
-    "loginLink": "Anmelden"
+    "loginLink": "Anmelden",
+    "forgotPassword": "Passwort vergessen",
+    "forgotPasswordTitle": "Passwort vergessen",
+    "forgotPasswordDesc": "Geben Sie Ihre E-Mail-Adresse ein und wir senden Ihnen einen Link zum Zurücksetzen des Passworts.",
+    "sendLink": "Link senden",
+    "sentSuccess": "Falls diese E-Mail registriert ist, wurde ein Link zum Zurücksetzen des Passworts gesendet.",
+    "sentExpiry": "Der Link ist 1 Stunde gültig.",
+    "backToLogin": "← Zurück zur Anmeldung",
+    "newPasswordTitle": "Neues Passwort",
+    "newPasswordLabel": "Neues Passwort",
+    "repeatPassword": "Passwort bestätigen",
+    "savePassword": "Passwort speichern",
+    "passwordsNoMatch": "Passwörter stimmen nicht überein",
+    "passwordTooShort": "Passwort zu kurz (min. 6 Zeichen)",
+    "linkInvalid": "Ungültiger Link.",
+    "resetError": "Fehler. Link ist ungültig oder abgelaufen.",
+    "resetSuccess": "Passwort aktualisiert! Weiterleitung zur Anmeldung...",
+    "orLoginWith": "oder anmelden mit",
+    "continueWithFacebook": "Mit Facebook fortfahren",
+    "googleError": "Google-Anmeldung fehlgeschlagen",
+    "facebookError": "Facebook-Anmeldung fehlgeschlagen",
+    "facebookSdkError": "Facebook SDK nicht geladen",
+    "generalError": "Fehler. Bitte versuchen Sie es erneut."
   },
   "catalog": {
     "addTrade": "Zum Tausch hinzufügen",
@@ -125,5 +153,15 @@
     "commemorative": "Gedenkmünze",
     "collector": "Sammlermünze",
     "tokens": "Jeton"
+  },
+  "itemTypes": {
+    "collection": "Sammlung",
+    "trade": "Tausch",
+    "wishlist": "Wunschliste"
+  },
+  "collection2": {
+    "addItem": "Hinzufügen",
+    "selectSection": "Bereich wählen:",
+    "category": "Kategorie"
   }
 }

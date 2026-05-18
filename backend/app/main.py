@@ -12,7 +12,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from app.database import init_db
-from app.routes import auth, catalog, collection, recognition, admin
+from app.routes import auth, catalog, collection, recognition, admin, numista
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,6 +50,7 @@ app.include_router(catalog.router)
 app.include_router(collection.router)
 app.include_router(recognition.router)
 app.include_router(admin.router)
+app.include_router(numista.router)
 
 @app.get("/")
 async def root():

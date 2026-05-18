@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import FlagIcon from "./FlagIcon";
+
+const COIN_CATS = [
+  { id: "circulation",   icon: "💰", labelKey: "section.circulation" },
+  { id: "commemorative", icon: "🏛️",  labelKey: "section.commemorative" },
+  { id: "collector",     icon: "⭐",  labelKey: "section.collector" },
+  { id: "tokens",        icon: "🎰",  labelKey: "section.tokens" },
+];
 
 const ROW = (active, indent, extra = {}) => ({
   padding: `5px 8px 5px ${indent}px`,
@@ -27,6 +34,7 @@ function deduplicatePeriods(periods) {
 
 // Single country row with expandable periods
 function CountryRow({ country, filter, onSelect, section }) {
+  const { t } = useTranslation();
   const isOpen = filter.countryId === country.id;
 
   const params = { country_id: country.id };
@@ -50,15 +58,33 @@ function CountryRow({ country, filter, onSelect, section }) {
   }
 
   function clickPeriod(period) {
-    onSelect({
-      countryId: country.id,
-      countryCode: country.code,
-      countryName: country.name_lv || country.name,
-      periodId: period.id,
-      periodName: period.name,
-      periodYearStart: period.year_start,
-      periodYearEnd: period.year_end,
-    });
+    const alreadyActive = filter.countryId === country.id && filter.periodName === period.name;
+    if (alreadyActive) {
+      onSelect({
+        countryId: country.id,
+        countryCode: country.code,
+        countryName: country.name_lv || country.name,
+        periodId: null,
+        periodName: null,
+        coinCategory: null,
+      });
+    } else {
+      onSelect({
+        countryId: country.id,
+        countryCode: country.code,
+        countryName: country.name_lv || country.name,
+        periodId: period.id,
+        periodName: period.name,
+        periodYearStart: period.year_start,
+        periodYearEnd: period.year_end,
+        coinCategory: null,
+      });
+    }
+  }
+
+  function clickCoinCat(catId) {
+    const newCat = filter.coinCategory === catId ? null : catId;
+    onSelect({ ...filter, coinCategory: newCat });
   }
 
   const countryActive = isOpen && !filter.periodName;
@@ -83,18 +109,43 @@ function CountryRow({ country, filter, onSelect, section }) {
           ? ` (${period.year_start}–${period.year_end ?? "..."})`
           : "";
         return (
-          <div key={period.id} onClick={() => clickPeriod(period)}
-            style={ROW(pActive, 40, {
-              fontSize: 12,
-              background: pActive ? "#ede9fe" : "transparent",
-              color: pActive ? "#7c3aed" : "#475569",
-              fontWeight: pActive ? 700 : 400,
-              margin: "1px 0",
+          <Fragment key={period.id}>
+            <div onClick={() => clickPeriod(period)}
+              style={ROW(pActive, 40, {
+                fontSize: 12,
+                background: pActive ? "#ede9fe" : "transparent",
+                color: pActive ? "#7c3aed" : "#475569",
+                fontWeight: pActive ? 700 : 400,
+                margin: "1px 0",
+              })}
+              onMouseEnter={e => { if (!pActive) e.currentTarget.style.background = "#f8fafc"; }}
+              onMouseLeave={e => { if (!pActive) e.currentTarget.style.background = "transparent"; }}>
+              <span style={{ lineHeight: 1.35 }}>{period.name}{years}</span>
+              {(section === "coins" || !section) && (
+                <span style={{ fontSize: 10, color: "#94a3b8" }}>{pActive ? "▼" : "▶"}</span>
+              )}
+            </div>
+
+            {pActive && (section === "coins" || !section) && COIN_CATS.map(cat => {
+              const catActive = filter.coinCategory === cat.id;
+              return (
+                <div key={cat.id}
+                  onClick={e => { e.stopPropagation(); clickCoinCat(cat.id); }}
+                  style={ROW(catActive, 56, {
+                    fontSize: 11,
+                    background: catActive ? "#dbeafe" : "transparent",
+                    color: catActive ? "#1d4ed8" : "#64748b",
+                    fontWeight: catActive ? 700 : 400,
+                    margin: "1px 0",
+                  })}
+                  onMouseEnter={e => { if (!catActive) e.currentTarget.style.background = "#f0f9ff"; }}
+                  onMouseLeave={e => { if (!catActive) e.currentTarget.style.background = "transparent"; }}>
+                  <span>{cat.icon} {t(cat.labelKey)}</span>
+                  {catActive && <span style={{ fontSize: 9 }}>✕</span>}
+                </div>
+              );
             })}
-            onMouseEnter={e => { if (!pActive) e.currentTarget.style.background = "#f8fafc"; }}
-            onMouseLeave={e => { if (!pActive) e.currentTarget.style.background = "transparent"; }}>
-            <span style={{ lineHeight: 1.35 }}>{period.name}{years}</span>
-          </div>
+          </Fragment>
         );
       })}
 

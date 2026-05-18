@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../api";
+import SocialLogin from "../components/SocialLogin";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -35,8 +36,12 @@ export default function Login() {
             <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
           </div>
           {error && <p className="error">{error}</p>}
-          <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: 8 }}>{t("auth.loginBtn")}</button>
+          <div style={{ textAlign: "right", marginBottom: 8 }}>
+            <Link to="/forgot-password" style={{ fontSize: 13, color: "#6366f1" }}>{t("auth.forgotPassword")}</Link>
+          </div>
+          <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: 4 }}>{t("auth.loginBtn")}</button>
         </form>
+        <SocialLogin onError={setError} />
         <p style={{ marginTop: 16, textAlign: "center", fontSize: 14 }}>
           {t("auth.noAccount")} <Link to="/register" style={{ color: "#2563eb" }}>{t("auth.registerLink")}</Link>
         </p>
